@@ -19,7 +19,10 @@ import { selectError, selectSuccessMessage } from '../cart/cartngrx/cart.reducer
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatOptionModule } from '@angular/material/core';
 import { MatSelectModule } from '@angular/material/select';
-import { ReactiveFormsModule } from '@angular/forms';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { Categories } from '../pages/categories/ngrx/categories.model';
+import { selectCategories } from '../pages/categories/ngrx/categories.reducers';
+import { CategoryActions } from '../pages/categories/ngrx/categories.actions';
 
 
 @Component({
@@ -45,7 +48,10 @@ export class HomeComponent implements OnInit {
   productQuantities: { [key: string]: number } = {};
   message$: Observable<string | null>;
   error$: Observable<string | null>;
-  
+  categories$: Observable<Categories[]>; // Observable for categories
+  filteredProducts: Product[] = [];
+  selectedCategory = new FormControl(''); // FormControl for dropdown
+  searchControl = new FormControl(''); // FormControl for search bar
 
   
 
@@ -61,6 +67,8 @@ export class HomeComponent implements OnInit {
     this.products$ = this.store.select(selectProducts);
     this.message$ = this.store.select(selectSuccessMessage);
     this.error$ = this.store.select(selectError);
+    this.store.dispatch(CategoryActions.loadCategories());
+    this.categories$ = this.store.select(selectCategories); // Fetch categories from store
 
 
     this.loggeduser$

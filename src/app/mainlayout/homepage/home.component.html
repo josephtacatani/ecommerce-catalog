@@ -17,7 +17,15 @@
   </header>
 
   <main>
-
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Category</mat-label>
+      <mat-select id="category" formControlName="category" placeholder="Select Category">
+        <mat-option *ngFor="let category of categories$ | async" [value]="category.category_id">
+          {{ category.category_name }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+    
     
     <!-- Main product listing -->
     <div class="product-list" *ngIf="products$ | async as products">
