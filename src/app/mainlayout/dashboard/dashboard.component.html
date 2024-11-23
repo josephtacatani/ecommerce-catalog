@@ -1,0 +1,46 @@
+<mat-sidenav-container class="sidenav-container">
+  <!-- Sidebar Navigation -->
+  <mat-sidenav #drawer mode="side" class="sidenav" fixedInViewport="true" [opened]="true">
+    <mat-toolbar color="primary">Simple App</mat-toolbar>
+    <mat-nav-list>
+      <mat-list-item [routerLink]="['/dashboard', 'categories']">
+        <mat-icon>category</mat-icon>
+        <span>Categories</span>
+      </mat-list-item>
+      <mat-list-item [routerLink]="['/dashboard', 'products']">
+        <mat-icon>inventory</mat-icon>
+        <span>Products</span>
+      </mat-list-item>
+      <mat-list-item [routerLink]="['/dashboard', 'transactions']">
+        <mat-icon>receipt_long</mat-icon>
+        <span>Transactions</span>
+      </mat-list-item>
+      <mat-list-item [routerLink]="['/dashboard', 'users']">
+        <mat-icon>people</mat-icon>
+        <span>Users</span>
+      </mat-list-item>
+    </mat-nav-list>
+  </mat-sidenav>
+
+  <!-- Main Content Area -->
+  <mat-sidenav-content>
+    <mat-toolbar color="primary">
+      <button mat-icon-button (click)="drawer.toggle()">
+        <mat-icon>menu</mat-icon>
+      </button>
+      <span>Dashboard</span>
+      <span class="spacer"></span>
+      <span *ngIf="loggeduser$ | async as user">Hello, {{user.first_name}}</span>
+      <button mat-icon-button>
+        <mat-icon>account_circle</mat-icon>
+      </button>
+      <button mat-icon-button (click)="logout()">
+        <mat-icon>logout</mat-icon>
+      </button>
+    </mat-toolbar>
+
+    <div class="content">
+      <router-outlet></router-outlet>  <!-- Displays the routed component here -->
+    </div>
+  </mat-sidenav-content>
+</mat-sidenav-container>

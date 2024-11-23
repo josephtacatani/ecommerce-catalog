@@ -1,0 +1,29 @@
+<div class="cart-container">
+    <div class="cart-header">
+      <span>My Cart</span>
+      <button mat-button color="warn" (click)="removeAllItems()">Remove All</button>
+    </div>
+  
+    <div class="cart-items" *ngIf="cartItems$ | async as cartItems">
+      <div *ngFor="let item of cartItems;" class="cart-item">
+        <img [src]="item.product_img" alt="{{ item.product_name }}" class="product-image" />
+        <div class="item-details">
+          <span class="product-name">{{ item.product_name }}</span>
+          <span class="product-quantity">Quantity: {{ item.quantity }}</span>
+          <span class="product-price">{{ item.currency }} {{ item.total_price }}</span>
+        </div>
+        <button mat-icon-button color="warn" (click)="removeItem(item.cart_id)">
+          <mat-icon>delete</mat-icon>
+        </button>
+      </div>
+    </div>
+  
+    <div class="cart-footer">
+      <div class="subtotal">
+        <span>Sub-Total:</span>
+        <!-- <span>{{ currency }} {{ calculateSubtotal()  }}</span> -->
+      </div>
+      <button mat-raised-button color="primary" (click)="checkout()">Check Out</button>
+    </div>
+  </div>
+  

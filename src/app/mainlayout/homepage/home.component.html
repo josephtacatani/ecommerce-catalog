@@ -1,0 +1,37 @@
+<div class="home-container">
+  <header>
+    <h1>Lozoppe</h1>
+    <nav>
+      <button mat-icon-button (click)="toggleCart()">
+        <mat-icon>shopping_cart</mat-icon>
+      </button>
+
+      <span *ngIf="loggeduser$ | async as user">Hello, {{user.first_name}}</span>
+      <button mat-icon-button>
+        <mat-icon>account_circle</mat-icon>
+      </button>
+      <button mat-icon-button (click)="logout()">
+        <mat-icon>logout</mat-icon>
+      </button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Main product listing -->
+    <div class="product-list" *ngIf="products$ | async as products">
+      <div *ngFor="let product of products " class="product-card">
+        <img [src]="product.product_img" alt="{{ product.product_name }}" />
+        <h3>{{ product.product_name }}</h3>
+        <p>{{ product.currency }} {{ product.price }}</p>
+        <div class="actions">
+          <button mat-raised-button color="primary" (click)="addToCart(product)" >Add to Cart</button>
+
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Cart Dropdown -->
+  <app-cart *ngIf="isCartVisible"></app-cart>
+  
+</div>

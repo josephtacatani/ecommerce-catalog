@@ -1,0 +1,3723 @@
+
+
+// File: src\app\app-routing.module.ts
+import { NgModule } from '@angular/core';
+import { RouterModule, Routes } from '@angular/router';
+import { DashboardComponent } from './mainlayout/dashboard/dashboard.component';
+import { UserListComponent } from './mainlayout/pages/users/user-list.component';
+
+
+const routes: Routes = [
+  { path: '', redirectTo: '/dashboard', pathMatch: 'full' },
+  { path: 'dashboard', component: DashboardComponent },
+  { path: 'users', component: UserListComponent }, // Ensure 'UserListComponent' is correctly referenced here
+  // Add more routes as needed
+];
+
+@NgModule({
+  imports: [RouterModule.forRoot(routes)],
+  exports: [RouterModule]
+})
+export class AppRoutingModule {}
+
+
+// File: src\app\app.component.html
+<router-outlet></router-outlet>
+
+// File: src\app\app.component.ts
+import { Component, OnInit } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+import { Store } from '@ngrx/store';
+import { AuthActions } from './state/auth/auth.actions';
+
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [RouterOutlet],
+  templateUrl: './app.component.html'
+  
+})
+export class AppComponent implements OnInit{
+    constructor(private store: Store) {}
+
+    ngOnInit() {
+        // Check for a token in localStorage and dispatch an action to set the user as authenticated
+        const token = localStorage.getItem('authToken');
+        if (token) {
+          // Dispatch a custom action with a placeholder message to set the user as logged in
+          this.store.dispatch(AuthActions.loginSuccess({ 
+            response: { 
+              data: { 
+                message: 'Token restored from localStorage',  // Placeholder message
+                token: token,                                 // Token from localStorage
+                user: null                                    // User info is unknown here, so set as null
+              } 
+            }
+          }));
+        }
+      }
+}
+
+
+// File: src\app\auth\auth.guard.ts
+import { Injectable } from '@angular/core';
+import { CanActivate, Router } from '@angular/router';
+import { Observable } from 'rxjs';
+
+@Injectable({
+  providedIn: 'root',
+})
+export class AuthGuard implements CanActivate {
+  constructor(private router: Router) {}
+
+  canActivate(): boolean | Observable<boolean> | Promise<boolean> {
+    const isAuthenticated = !!localStorage.getItem('authToken'); // Example: Check if authToken exists in localStorage
+
+    if (isAuthenticated) {
+      return true; // Allow access to the route
+    } else {
+      this.router.navigate(['/login']); // Redirect to login if not authenticated
+      return false;
+    }
+  }
+}
+
+
+// File: src\app\auth\auth.service.ts
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { environment } from 'src/environment/environment';
+import { AuthRequestInterface, AuthResponseInterface, ChangePasswordRequestInterface, ChangePasswordResponseInterface, ForgotPasswordRequestInterface, ForgotPasswordResponseInterface, RegisterRequestInterface, RegisterResponseInterface } from '../core/auth.model';
+
+@Injectable({
+  providedIn: 'root',
+})
+export class AuthService {
+  private apiUrl = `${environment.apiUrl}/auth`;
+
+  constructor(private http: HttpClient) {}
+
+  /**
+   * Sends a login request with the required headers and payload.
+   * @param credentials - The user's login credentials
+   * @returns Observable with the response containing the authentication token and user info.
+   */
+  login(credentials: AuthRequestInterface): Observable<AuthResponseInterface> {
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'X-Request-ID': '1', // Set the X-Request-ID header as required
+    });
+
+    return this.http.post<AuthResponseInterface>(`${this.apiUrl}/login`, credentials, { headers });
+  }
+
+  /**
+   * Sends a register request with the required headers and payload.
+   * @param data - The user's registration data
+   * @returns Observable with the response containing the registration status.
+   */
+  register(data: RegisterRequestInterface): Observable<RegisterResponseInterface> {
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'X-Request-ID': '1', // Group tag identifier
+    });
+    return this.http.post<RegisterResponseInterface>(`${this.apiUrl}/register`, data, { headers });
+  }
+
+  verifyusername(data: ForgotPasswordRequestInterface): Observable<ForgotPasswordResponseInterface> {
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'X-Request-ID': '1', // Group tag identifier
+    });
+    return this.http.post<ForgotPasswordResponseInterface>(`${this.apiUrl}/verify-username`, data, { headers });
+  }
+
+  
+  chnagePassword(data: ChangePasswordRequestInterface): Observable<ChangePasswordResponseInterface> {
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'X-Request-ID': '1', // Group tag identifier
+    });
+    return this.http.post<ChangePasswordResponseInterface>(`${this.apiUrl}/reset-password`, data, { headers });
+  }
+
+  /**
+   * Sends a logout request with the required headers and token.
+   * @returns Observable with the logout response.
+   */
+  logout(): Observable<any> {
+    // Retrieve the token from localStorage
+    const token = localStorage.getItem('authToken');
+
+    // Set headers with the Authorization token and X-Request-ID
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`, // Include the token as a Bearer token
+      'X-Request-ID': '1', // Include the required X-Request-ID header
+    });
+
+    // Send the logout request with the headers
+    return this.http.post(`${this.apiUrl}/logout`, {}, { headers });
+  }
+}
+
+
+// File: src\app\auth\forgotpassword\forgotpassword.component.html
+<mat-card>
+    <h1>Forgot Password Recovery</h1>
+    <p>
+      Already have an account? 
+      <a routerLink="/login">Login here</a>
+    </p>
+    <mat-card-content>
+      <!-- Username Verification Form -->
+      <form *ngIf="!(otp$ | async)" [formGroup]="loginForm" (ngSubmit)="verifyOTP()">
+        <mat-form-field appearance="fill">
+          <mat-label>Enter Username</mat-label>
+          <input matInput formControlName="username" required />
+          <mat-error *ngIf="loginForm.get('username')?.hasError('required')">
+            Username is required
+          </mat-error>
+        </mat-form-field>
+  
+        <button mat-raised-button color="primary" type="submit" [disabled]="loginForm.invalid">
+          Verify Username
+        </button>
+      </form>
+  
+      <!-- OTP and Password Change Form -->
+      <form *ngIf="otp$ | async" [formGroup]="otpLoginForm" (ngSubmit)="changePassword()">
+        <mat-form-field appearance="outline">
+          <mat-label>Enter OTP</mat-label>
+          <input matInput formControlName="otp" required />
+          <mat-error *ngIf="otpLoginForm.get('otp')?.hasError('required')">
+            OTP is required
+          </mat-error>
+        </mat-form-field>
+  
+        <mat-form-field appearance="fill">
+          <mat-label>Enter New Password</mat-label>
+          <input matInput formControlName="newPassword" type="password" required />
+          <mat-error *ngIf="otpLoginForm.get('newPassword')?.hasError('required')">
+            Password is required
+          </mat-error>
+        </mat-form-field>
+  
+        <button mat-raised-button color="primary" type="submit" [disabled]="otpLoginForm.invalid">
+          Change Password
+        </button>
+
+        <div *ngIf="changePasswordMessage$ | async as changePasswordMessage" class="success-message">
+          {{ changePasswordMessage }}
+        </div>
+        <div *ngIf="changePasswordFailure$ | async as changePasswordFailure" class="success-message">
+          {{ changePasswordFailure }}
+        </div>
+      </form>
+  
+      <!-- Success and Error Messages -->
+      <div *ngIf="messageSuccess$ | async as successMessage" class="success-message">
+        {{ successMessage }}
+      </div>
+  
+      <div *ngIf="errorMessage$ | async as errorMessage" class="error-message">
+        {{ errorMessage }}
+      </div>
+    </mat-card-content>
+  </mat-card>
+  
+
+// File: src\app\auth\forgotpassword\forgotpassword.component.ts
+import { Component, OnInit } from '@angular/core';
+import { Store } from '@ngrx/store';
+import { Observable } from 'rxjs';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+
+import { AuthActions } from '../../state/auth/auth.actions';
+import { selectChangePasswordFailure, selectChangePasswordMessage, selectErrorMessage, selectIsAuthenticated, selectVerificationFailureMessage, selectVerificationOTP, selectVerificationSuccessMessage } from '../../state/auth/auth.reducer';
+import { CommonModule } from '@angular/common';
+import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { AuthRequestInterface, ChangePasswordRequestInterface, ForgotPasswordRequestInterface } from 'src/app/core/auth.model';
+import { Router, RouterModule } from '@angular/router';
+import { selectSuccessMessage } from 'src/app/state/users/users.reducer';
+
+@Component({
+  selector: 'app-forgot-password',
+  standalone: true,
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,           // For using reactive forms
+    MatCardModule,                 // For card layout
+    MatFormFieldModule,            // For form fields
+    MatInputModule,                // For input fields
+    MatButtonModule,               // For buttons
+    MatIconModule,                 // For icons, if needed
+    MatProgressSpinnerModule,       // For showing loading spinner, if desired
+    RouterModule
+
+  ],
+  templateUrl: './forgotpassword.component.html',
+  styleUrls: ['./forgotpassword.component.scss'],
+})
+export class ForgotPasswordComponent implements OnInit {
+  loginForm: FormGroup;
+  otpLoginForm: FormGroup;
+
+  errorMessage$: Observable<string | null>; // Observable for error message
+  otp$: Observable<string | null>;
+  messageSuccess$: Observable<string | null>;
+  changePasswordMessage$: Observable<string | null>;
+  changePasswordFailure$: Observable<string | null>
+
+  constructor(
+    private store: Store,
+    private fb: FormBuilder,
+    private router: Router,
+   
+  ) {
+    // Use the `selectErrorMessage` selector to access error message from the store
+    this.errorMessage$ = this.store.select(selectVerificationFailureMessage);
+    this.messageSuccess$ = this.store.select(selectVerificationSuccessMessage);
+    this.otp$ = this.store.select(selectVerificationOTP);
+    this.changePasswordMessage$ = this.store.select(selectChangePasswordMessage);
+    this.changePasswordFailure$ = this.store.select(selectChangePasswordFailure);
+
+    // Initialize the form group with controls for username and password
+    this.loginForm = this.fb.group({
+      username: ['', Validators.required]
+    });
+
+    this.otpLoginForm = this.fb.group({
+        newPassword: ['', Validators.required],
+        otp: ['']
+        
+    });
+
+
+
+  }
+
+  ngOnInit(): void {
+      this.otp$.subscribe((otp)=>{
+        if(otp){
+            this.otpLoginForm.patchValue({otp})
+        }
+      })
+  }
+
+  // Dispatch login action on form submission
+  verifyOTP() {
+    if (this.loginForm.valid) {
+      const data: ForgotPasswordRequestInterface = this.loginForm.value;
+      this.store.dispatch(AuthActions.verifyUsername({ data }));
+    }
+  }
+
+  changePassword(){
+    if (this.otpLoginForm.valid){
+        const data: ChangePasswordRequestInterface = this.otpLoginForm.value;
+        console.log('datas',data);
+        this.store.dispatch(AuthActions.changePassword({data}))
+    }
+  }
+
+
+
+}
+
+
+// File: src\app\auth\login\login.component.html
+<mat-card>
+  <h1>Login</h1>
+  <p>No account? <a routerLink="/register">Register here</a></p>
+  <mat-card-content>
+    <form [formGroup]="loginForm" (ngSubmit)="onLogin()">
+      <mat-form-field appearance="fill">
+        <mat-label>Username</mat-label>
+        <input matInput formControlName="username" required />
+        <mat-error *ngIf="loginForm.get('username')?.hasError('required')">
+          Username is required
+        </mat-error>
+      </mat-form-field>
+      
+      <mat-form-field appearance="fill">
+        <mat-label>Password</mat-label>
+        <input matInput formControlName="password" type="password" required />
+        <mat-error *ngIf="loginForm.get('password')?.hasError('required')">
+          Password is required
+        </mat-error>
+      </mat-form-field>
+      <p><a routerLink="/forgotpassword">Forgot Password?</a></p>
+
+      <button mat-raised-button color="primary" type="submit" [disabled]="loginForm.invalid">Login</button>
+    </form>
+    
+    <!-- Display error message if login fails -->
+    <div *ngIf="errorMessage$ | async as errorMessage" class="error-message">
+      {{ errorMessage }}
+    </div>
+  </mat-card-content>
+</mat-card>
+
+
+// File: src\app\auth\login\login.component.ts
+import { Component, OnInit } from '@angular/core';
+import { Store } from '@ngrx/store';
+import { Observable } from 'rxjs';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+
+import { AuthActions } from '../../state/auth/auth.actions';
+import { selectErrorMessage, selectIsAuthenticated } from '../../state/auth/auth.reducer';
+import { CommonModule } from '@angular/common';
+import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { AuthRequestInterface } from 'src/app/core/auth.model';
+import { Router, RouterModule } from '@angular/router';
+
+@Component({
+  selector: 'app-login',
+  standalone: true,
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,           // For using reactive forms
+    MatCardModule,                 // For card layout
+    MatFormFieldModule,            // For form fields
+    MatInputModule,                // For input fields
+    MatButtonModule,               // For buttons
+    MatIconModule,                 // For icons, if needed
+    MatProgressSpinnerModule,       // For showing loading spinner, if desired
+    RouterModule
+
+  ],
+  templateUrl: './login.component.html',
+  styleUrls: ['./login.component.scss'],
+})
+export class LoginComponent implements OnInit {
+  loginForm: FormGroup;
+  errorMessage$: Observable<string | null>; // Observable for error message
+
+  constructor(
+    private store: Store,
+    private fb: FormBuilder,
+    private router: Router
+  ) {
+    // Initialize the form group with controls for username and password
+    this.loginForm = this.fb.group({
+      username: ['', Validators.required],
+      password: ['', Validators.required],
+    });
+
+    // Use the `selectErrorMessage` selector to access error message from the store
+    this.errorMessage$ = this.store.select(selectErrorMessage);
+  }
+
+  // Dispatch login action on form submission
+  onLogin() {
+    if (this.loginForm.valid) {
+      const credentials: AuthRequestInterface = this.loginForm.value;
+      this.store.dispatch(AuthActions.login({ credentials }));
+    }
+  }
+
+  ngOnInit() {
+    this.store.select(selectIsAuthenticated).subscribe((isAuthenticated) => {
+      if (isAuthenticated) {
+        this.router.navigate(['/']); // Redirect to the dashboard route after login
+      }
+    });
+  }
+}
+
+
+// File: src\app\auth\register\register.component.html
+<mat-card>
+    <h1>Register</h1>
+    <p>
+        Already have an account? 
+        <a routerLink="/login">Login here</a>
+    </p>
+    <mat-card-content>
+      <form [formGroup]="registerForm" (ngSubmit)="onRegister()">
+        <mat-form-field appearance="fill">
+          <mat-label>First Name</mat-label>
+          <input matInput formControlName="first_name" required />
+          <mat-error *ngIf="registerForm.get('first_name')?.hasError('required')">
+            First name is required
+          </mat-error>
+        </mat-form-field>
+  
+        <mat-form-field appearance="fill">
+          <mat-label>Last Name</mat-label>
+          <input matInput formControlName="last_name" required />
+          <mat-error *ngIf="registerForm.get('last_name')?.hasError('required')">
+            Last name is required
+          </mat-error>
+        </mat-form-field>
+  
+        <mat-form-field appearance="fill">
+          <mat-label>Contact Number</mat-label>
+          <input matInput formControlName="contact_number" required />
+          <mat-error *ngIf="registerForm.get('contact_number')?.hasError('required')">
+            Contact number is required
+          </mat-error>
+          <mat-error *ngIf="registerForm.get('contact_number')?.hasError('pattern')">
+            Contact number must be numeric
+          </mat-error>
+        </mat-form-field>
+  
+        <mat-form-field appearance="fill">
+          <mat-label>Address</mat-label>
+          <input matInput formControlName="address" required />
+          <mat-error *ngIf="registerForm.get('address')?.hasError('required')">
+            Address is required
+          </mat-error>
+        </mat-form-field>
+  
+        <mat-form-field appearance="fill">
+          <mat-label>Username</mat-label>
+          <input matInput formControlName="username" required />
+          <mat-error *ngIf="registerForm.get('username')?.hasError('required')">
+            Username is required
+          </mat-error>
+        </mat-form-field>
+  
+        <mat-form-field appearance="fill">
+          <mat-label>Password</mat-label>
+          <input matInput formControlName="password" type="password" required />
+          <mat-error *ngIf="registerForm.get('password')?.hasError('required')">
+            Password is required
+          </mat-error>
+          <mat-error *ngIf="registerForm.get('password')?.hasError('minlength')">
+            Password must be at least 6 characters long
+          </mat-error>
+        </mat-form-field>
+  
+        <mat-form-field appearance="fill">
+          <mat-label>Access Level</mat-label>
+          <input matInput formControlName="access_level" required />
+          <mat-error *ngIf="registerForm.get('access_level')?.hasError('required')">
+            Access level is required
+          </mat-error>
+        </mat-form-field>
+  
+        <button mat-raised-button color="primary" type="submit" [disabled]="registerForm.invalid || (isSubmitting$ | async)">
+          Register
+        </button>
+        <mat-spinner *ngIf="isSubmitting$ | async" diameter="24"></mat-spinner>
+      </form>
+  
+      <!-- Display success or error messages -->
+      <div *ngIf="registerSuccessMessage$ | async as successMessage" class="success-message">
+        {{ successMessage }}
+      </div>
+      <div *ngIf="registerError$ | async as errorMessage" class="error-message">
+        {{ errorMessage }}
+      </div>
+    </mat-card-content>
+  </mat-card>
+  
+
+// File: src\app\auth\register\register.component.ts
+import { Component } from '@angular/core';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+import { Store } from '@ngrx/store';
+import { AuthActions } from '../../state/auth/auth.actions';
+import { selectRegisterSuccessMessage, selectRegisterError, selectIsSubmitting } from '../../state/auth/auth.reducer';
+import { Observable } from 'rxjs';
+import { CommonModule } from '@angular/common';
+import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatButtonModule } from '@angular/material/button';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { RouterModule } from '@angular/router';
+
+@Component({
+  selector: 'app-register',
+  standalone: true,
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    MatCardModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatButtonModule,
+    MatProgressSpinnerModule,
+    RouterModule
+  ],
+  templateUrl: './register.component.html',
+  styleUrls: ['./register.component.scss'],
+})
+export class RegisterComponent {
+  registerForm: FormGroup;
+  registerSuccessMessage$: Observable<string | null>;
+  registerError$: Observable<string | null>;
+  isSubmitting$: Observable<boolean>;
+
+  constructor(private fb: FormBuilder, private store: Store) {
+    // Initialize form controls with validation
+    this.registerForm = this.fb.group({
+      first_name: ['', Validators.required],
+      last_name: ['', Validators.required],
+      contact_number: ['', [Validators.required, Validators.pattern(/^[0-9]+$/)]],
+      address: ['', Validators.required],
+      username: ['', Validators.required],
+      password: ['', [Validators.required, Validators.minLength(6)]],
+      access_level: ['admin', Validators.required],
+    });
+
+    // Selectors to retrieve registration status and messages from the store
+    this.registerSuccessMessage$ = this.store.select(selectRegisterSuccessMessage);
+    this.registerError$ = this.store.select(selectRegisterError);
+    this.isSubmitting$ = this.store.select(selectIsSubmitting);
+  }
+
+  // Method to handle registration form submission
+  onRegister() {
+    if (this.registerForm.valid) {
+      const formData = this.registerForm.value;
+      this.store.dispatch(AuthActions.register({ data: formData }));
+    }
+  }
+}
+
+
+// File: src\app\core\auth.model.ts
+import { UserInterface } from "./user.model";
+
+export interface AuthRequestInterface {
+    username: string;
+    password: string;
+  }
+
+  
+  export interface AuthResponseInterface {
+    data: {
+      message: string;
+      token: string;
+      user?: UserInterface | null; // Using UserInterface here
+    };
+  }
+
+  export interface AuthErrorInterface {
+    data: {
+        error: string;
+    }
+  }
+
+  export interface RegisterRequestInterface {
+    first_name: string;
+    last_name: string;
+    contact_number: string;
+    address: string;
+    username: string;
+    password: string;
+    access_level: string;
+  }
+  
+
+  export interface RegisterResponseInterface {
+    data: {
+      message: string;
+    };
+  }
+
+  export interface RegisterErrorResponseInterface {
+    data: {
+      error: string;
+    };
+  }
+  
+
+  export interface ForgotPasswordRequestInterface{
+    username: string;
+  }
+
+
+  export interface ForgotPasswordResponseInterface{
+    data: {
+      message: string;
+      otp: string;
+    }
+  }
+
+  export interface ChangePasswordRequestInterface{
+   
+    otp: string
+    newPassword: string;
+
+    
+  }
+
+  export interface ChangePasswordResponseInterface{
+    data: {
+      message: string;
+    }
+
+  }
+
+  export interface ChangePasswordErrorInterface {
+    data: {
+      message: string;
+    }
+  }
+  
+
+
+// File: src\app\core\category.model.ts
+export interface CategoryInterface {
+    id: string;
+    name: string;
+    description: string;
+    createdDate?: string;
+    updatedDate?: string;
+  }
+
+// File: src\app\core\product.model.ts
+export interface ProductInterface {
+    id: string;
+    name: string;
+    description: string;
+    price: number;
+    stock: number;
+    category: string;
+  }
+  
+
+
+// File: src\app\core\user.model.ts
+
+export interface UserInterface {
+    id: string;
+    username: string;
+    role: string;
+  }
+
+  export interface User {
+    user_id: string;
+    first_name: string;
+    last_name: string;
+    contact_number: string;
+    address: string;
+    date_created: string; // ISO string format
+    username: string;
+    access_level: string | null;
+    user_img: string;
+    position: string | null;  // Nullable fields as per API response
+    department: string | null;
+    branch: string | null;
+    group_tag: string | null;
+    status: string | null;
+  }
+
+
+
+// Interface for the response when creating a user
+export interface CreateUserResponse {
+  data: {
+    message: string;
+    user: User[];
+  };
+}
+
+// Interface for the response when retrieving all users
+export interface GetUsersResponse {
+  data: {
+    users: User[];  // The array of users is within the "data" property
+  };
+}
+
+export interface GetLoggedUserResponse {
+  data: User;
+}
+
+
+// Interface for the response when deleting a user
+export interface DeleteUserResponse {
+  data: {
+    message: string;
+  };
+}
+
+// Request structure for creating a user
+export interface CreateUserRequest {
+  first_name: string;
+  last_name: string;
+  contact_number: string;
+  address: string;
+  username: string;
+  password: string;
+  access_level: string;
+  user_img: string;
+  position: string;
+  department: string;
+  branch: string;
+  status: string;
+}
+
+
+// Request structure for updating a user
+export interface UpdateUserRequest {
+  first_name: string;
+  last_name: string;
+  contact_number: string;
+  address: string;
+  username: string;
+  password?: string;  // Optional for update
+  access_level: string;
+  user_img: string;
+  position: string;
+  department: string;
+  branch: string;
+  status: string;
+}
+
+
+// NgRx State interface for User
+export interface UserState {
+  users: any[]; // Adjust type as necessary
+  selectedUser: any | null; // Adjust type as necessary
+  loading: boolean;
+  error: string | null;
+  loggedusers: User | null;
+
+  // Additional state properties
+  isSubmitting: boolean;
+  successMessage: string | null;
+  errorMessage: string | null;
+}
+
+export interface UserResponseInterface{
+  data: {
+    message: string;
+    data: any;
+    error: string;
+  }
+}
+
+// File: src\app\mainlayout\dashboard\dashboard.component.html
+<mat-sidenav-container class="sidenav-container">
+  <!-- Sidebar Navigation -->
+  <mat-sidenav #drawer mode="side" class="sidenav" fixedInViewport="true" [opened]="true">
+    <mat-toolbar color="primary">Simple App</mat-toolbar>
+    <mat-nav-list>
+      <mat-list-item [routerLink]="['/dashboard', 'categories']">
+        <mat-icon>category</mat-icon>
+        <span>Categories</span>
+      </mat-list-item>
+      <mat-list-item [routerLink]="['/dashboard', 'products']">
+        <mat-icon>inventory</mat-icon>
+        <span>Products</span>
+      </mat-list-item>
+      <mat-list-item [routerLink]="['/dashboard', 'transactions']">
+        <mat-icon>receipt_long</mat-icon>
+        <span>Transactions</span>
+      </mat-list-item>
+      <mat-list-item [routerLink]="['/dashboard', 'users']">
+        <mat-icon>people</mat-icon>
+        <span>Users</span>
+      </mat-list-item>
+    </mat-nav-list>
+  </mat-sidenav>
+
+  <!-- Main Content Area -->
+  <mat-sidenav-content>
+    <mat-toolbar color="primary">
+      <button mat-icon-button (click)="drawer.toggle()">
+        <mat-icon>menu</mat-icon>
+      </button>
+      <span>Dashboard</span>
+      <span class="spacer"></span>
+      <span *ngIf="loggeduser$ | async as user">Hello, {{user.first_name}}</span>
+      <button mat-icon-button>
+        <mat-icon>account_circle</mat-icon>
+      </button>
+      <button mat-icon-button (click)="logout()">
+        <mat-icon>logout</mat-icon>
+      </button>
+    </mat-toolbar>
+
+    <div class="content">
+      <router-outlet></router-outlet>  <!-- Displays the routed component here -->
+    </div>
+  </mat-sidenav-content>
+</mat-sidenav-container>
+
+
+// File: src\app\mainlayout\dashboard\dashboard.component.ts
+import { Component, OnInit } from '@angular/core';
+import { MatSidenavModule } from '@angular/material/sidenav';
+import { MatToolbarModule } from '@angular/material/toolbar';
+import { MatIconModule } from '@angular/material/icon';
+import { MatListModule } from '@angular/material/list';
+import { MatButtonModule } from '@angular/material/button';
+import { RouterModule } from '@angular/router';
+import { CommonModule } from '@angular/common';
+import { Store } from '@ngrx/store';
+import { AuthActions } from 'src/app/state/auth/auth.actions';
+import { selectLoggedusers } from 'src/app/state/users/users.reducer';
+import { Observable } from 'rxjs';
+import { User } from 'src/app/core/user.model';
+import * as UserActions from '../../state/users/users.actions';
+
+@Component({
+  selector: 'app-dashboard',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatSidenavModule,
+    MatToolbarModule,
+    MatIconModule,
+    MatListModule,
+    MatButtonModule,
+    RouterModule, // Import RouterModule for navigation
+  ],
+  templateUrl: './dashboard.component.html',
+  styleUrls: ['./dashboard.component.scss'],
+})
+export class DashboardComponent implements OnInit {
+    loggeduser$: Observable<User | null>;
+
+    constructor(private store: Store){
+      this.loggeduser$ = this.store.select(selectLoggedusers);
+    }
+
+
+    ngOnInit(): void {
+      this.store.dispatch(UserActions.loadLoggedUser())
+    }
+  
+
+  logout(){
+    this.store.dispatch(AuthActions.logout())
+  }
+
+}
+
+
+// File: src\app\mainlayout\pages\categories\categories.component.html
+<div class="categories-container">
+
+    <!-- Search Bar -->
+    <mat-form-field appearance="outline" class="search-bar">
+      <mat-label>Search Categories</mat-label>
+      <input matInput [formControl]="searchControl" placeholder="Search by category name">
+    </mat-form-field>
+  
+    <!-- Add Category Button -->
+    <div class="actions">
+      <button mat-raised-button color="primary" (click)="openAddCategoryModal()">
+        <mat-icon>add</mat-icon> Add Category
+      </button>
+    </div>
+
+      <!-- Loading Indicator -->
+  <div *ngIf="isLoading$ | async" class="loading">
+    Loading users...
+  </div>
+
+  <!-- Error Message -->
+  <div *ngIf="error$ | async as error" class="error">
+    Error: {{ error }}
+  </div>
+  
+    <!-- Table -->
+    <div class="table-container">
+      <mat-table [dataSource]="dataSource" matSort>
+  
+        <!-- Category ID Column -->
+        <ng-container matColumnDef="category_id">
+          <mat-header-cell *matHeaderCellDef> ID </mat-header-cell>
+          <mat-cell *matCellDef="let category"> {{ category.category_id }} </mat-cell>
+        </ng-container>
+  
+        <!-- Category Name Column -->
+        <ng-container matColumnDef="category_name">
+          <mat-header-cell *matHeaderCellDef> Name </mat-header-cell>
+          <mat-cell *matCellDef="let category"> {{ category.category_name }} </mat-cell>
+        </ng-container>
+  
+        <!-- Date Created Column -->
+        <ng-container matColumnDef="date_created">
+          <mat-header-cell *matHeaderCellDef> Created On </mat-header-cell>
+          <mat-cell *matCellDef="let category"> {{ category.date_created | date:'shortDate' }} </mat-cell>
+        </ng-container>
+  
+        <!-- Created By Column -->
+        <ng-container matColumnDef="created_by">
+          <mat-header-cell *matHeaderCellDef> Created By </mat-header-cell>
+          <mat-cell *matCellDef="let category"> {{ category.created_by }} </mat-cell>
+        </ng-container>
+  
+        <!-- Actions Column -->
+        <ng-container matColumnDef="actions">
+          <mat-header-cell *matHeaderCellDef> Actions </mat-header-cell>
+          <mat-cell *matCellDef="let category">
+            <button mat-icon-button color="primary" (click)="openEditCategoryModal(category)">
+              <mat-icon>edit</mat-icon>
+            </button>
+            <button mat-icon-button color="warn" (click)="onDeleteCategory(category.category_id)">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </mat-cell>
+        </ng-container>
+  
+        <!-- Header and Row Definitions -->
+        <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+        <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
+      </mat-table>
+  
+      <!-- Paginator -->
+      <mat-paginator [pageSizeOptions]="[5, 10, 20]" showFirstLastButtons></mat-paginator>
+    </div>
+  </div>
+  
+
+// File: src\app\mainlayout\pages\categories\categories.component.ts
+import { Component, OnInit, ViewChild } from '@angular/core';
+import { Store } from '@ngrx/store';
+import { Observable } from 'rxjs';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
+import { MatTableDataSource, MatTableModule } from '@angular/material/table';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { Categories } from './ngrx/categories.model';
+import { CategoryActions } from '../../../mainlayout/pages/categories/ngrx/categories.actions';
+
+import { selectCategories, selectError, selectLoading, selectSuccessMessage } from './ngrx/categories.reducers';
+import { CommonModule } from '@angular/common';
+import { MatButtonModule } from '@angular/material/button';
+import { MatInputModule } from '@angular/material/input';
+import { MatIconModule } from '@angular/material/icon';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { CategoryModalComponent } from './categorymodal/categoryModal.component';
+
+@Component({
+  selector: 'app-categories',
+  templateUrl: './categories.component.html',
+  styleUrls: ['./categories.component.scss'],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,// Import MatTableModule for displaying tables
+    MatPaginatorModule,
+    MatDialogModule,
+    MatIconModule,
+    MatSnackBarModule,
+    MatFormFieldModule,
+    MatTableModule
+  ],
+  standalone: true
+})
+export class CategoriesComponent implements OnInit {
+  categories$: Observable<Categories[]>;
+  isLoading$: Observable<boolean>;
+  error$: Observable<string | null>;
+  message$: Observable<string | null>;
+
+  searchControl = new FormControl('');
+  dataSource = new MatTableDataSource<Categories>();
+  displayedColumns = ['category_id', 'category_name', 'date_created', 'created_by', 'actions'];
+
+  @ViewChild(MatPaginator) paginator!: MatPaginator;
+
+  constructor(
+    private store: Store,
+    private dialog: MatDialog,
+    private snackBar: MatSnackBar
+  ) {
+    this.categories$ = this.store.select(selectCategories);
+    this.isLoading$ = this.store.select(selectLoading);
+    this.error$ = this.store.select(selectError);
+    this.message$ = this.store.select(selectSuccessMessage);
+  }
+
+  ngOnInit(): void {
+    this.store.dispatch(CategoryActions.loadCategories());
+    this.setupSubscriptions();
+  }
+
+
+  private setupSubscriptions(): void {
+    // Update table data when categories change
+    this.categories$.subscribe((response) => {
+      if (response) {
+        this.dataSource.data = response; // Ensure the dataSource gets the array of categories
+        this.dataSource.paginator = this.paginator;
+      }
+    });
+
+    this.error$.subscribe((error) => {
+      if (error) {
+        console.error('Error received in component:', error); // Log the error
+        this.showSnackbar(error); // Optionally show the error in the UI
+      }
+    });
+    
+    
+
+    this.searchControl.valueChanges.subscribe((value) => {
+      const filterValue = value ? value.trim().toLowerCase() : ''; // Default to an empty string if value is null
+      this.dataSource.filter = filterValue;
+      if (this.dataSource.paginator) {
+        this.dataSource.paginator.firstPage();
+      }
+    });
+    
+
+    // Show success or error messages
+    this.message$.subscribe((message) => {
+      if (message) {
+        this.showSnackbar(message);
+      }
+    });
+  }
+
+  openAddCategoryModal(): void {
+    const dialogRef = this.dialog.open(CategoryModalComponent, {
+      width: '600px',
+      data: null,
+    });
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (result) {
+        this.store.dispatch(CategoryActions.createCategory({ categoryData: result }));
+      }
+    });
+  }
+
+  openEditCategoryModal(category: Categories): void {
+    const dialogRef = this.dialog.open(CategoryModalComponent, {
+      width: '600px',
+      data: category, // Pre-fill the modal with existing category data
+    });
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (result) {
+        this.store.dispatch(
+          CategoryActions.updateCategory({
+            categoryId: category.category_id,
+            categoryData: result,
+          })
+        );
+      }
+    });
+  }
+
+  onDeleteCategory(categoryId: string): void {
+    if (confirm('Are you sure you want to delete this category?')) {
+      this.store.dispatch(CategoryActions.deleteCategory({ categoryId }));
+    }
+  }
+
+  private showSnackbar(message: string): void {
+    this.snackBar.open(message, 'Close', {
+      duration: 3000,
+      verticalPosition: 'top',
+      horizontalPosition: 'center',
+    });
+  }
+}
+
+
+// File: src\app\mainlayout\pages\categories\categorymodal\categoryModal.component.html
+<h2 mat-dialog-title>{{ isEditMode ? 'Edit Category' : 'Add Category' }}</h2>
+
+<mat-dialog-content>
+  <form [formGroup]="categoryForm" (ngSubmit)="onSubmit()">
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Category Name</mat-label>
+      <input matInput formControlName="category_name" placeholder="Enter category name">
+      <mat-error *ngIf="categoryForm.get('category_name')?.hasError('required')">
+        Category name is required
+      </mat-error>
+      <mat-error *ngIf="categoryForm.get('category_name')?.hasError('maxlength')">
+        Category name cannot exceed 50 characters
+      </mat-error>
+    </mat-form-field>
+  </form>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="onCancel()">Cancel</button>
+  <button mat-raised-button color="primary" [disabled]="categoryForm.invalid" (click)="onSubmit()">
+    {{ isEditMode ? 'Save Changes' : 'Add Category' }}
+  </button>
+</mat-dialog-actions>
+
+
+// File: src\app\mainlayout\pages\categories\categorymodal\categoryModal.component.ts
+import { Component, Inject, OnInit } from '@angular/core';
+import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { Categories } from '../ngrx/categories.model';
+import { CommonModule } from '@angular/common';
+import { MatButtonModule } from '@angular/material/button';
+import { MatInputModule } from '@angular/material/input';
+import { MatIconModule } from '@angular/material/icon';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatPaginatorModule } from '@angular/material/paginator';
+import { MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatTableModule } from '@angular/material/table';
+import { Store } from '@ngrx/store';
+import { Observable } from 'rxjs';
+import { User } from 'src/app/core/user.model';
+import { selectLoggedusers } from 'src/app/state/users/users.reducer';
+
+@Component({
+  selector: 'app-category-modal',
+  templateUrl: './categoryModal.component.html',
+  styleUrls: ['./categoryModal.component.scss'],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatPaginatorModule,
+    MatDialogModule,
+    MatIconModule,
+    MatSnackBarModule,
+    MatFormFieldModule,
+    MatTableModule
+  ],
+  standalone: true
+})
+export class CategoryModalComponent implements OnInit {
+  categoryForm: FormGroup;
+  isEditMode: boolean;
+  userLogged$: Observable<User | null>;
+
+
+  constructor(
+    private fb: FormBuilder,
+    private dialogRef: MatDialogRef<CategoryModalComponent>,
+    private store: Store,
+
+    @Inject(MAT_DIALOG_DATA) public data: Categories | null
+  ) {
+    this.isEditMode = !!data; // Determine if it's edit mode based on the presence of data
+    this.categoryForm = this.fb.group({
+      category_name: [data?.category_name || '', [Validators.required, Validators.maxLength(50)]],
+      created_by: [data?.created_by]
+    });
+
+    this.userLogged$ = this.store.select(selectLoggedusers);
+  }
+
+  ngOnInit(): void {
+
+    this.userLogged$.subscribe((data)=>{
+      if(data && !this.isEditMode){
+        this.categoryForm.patchValue({created_by: data.username});
+      }
+    })
+  }
+
+  onSubmit(): void {
+    if (this.categoryForm.valid) {
+      this.dialogRef.close(this.categoryForm.value); // Pass the form data back to the parent
+    }
+  }
+
+  onCancel(): void {
+    this.dialogRef.close(null); // Close the dialog without passing any data
+  }
+}
+
+
+// File: src\app\mainlayout\pages\categories\ngrx\categories.actions.ts
+import { createActionGroup, emptyProps, props } from '@ngrx/store';
+import {
+  Categories,
+  CategoryErrorInterface,
+  CategoryRequestInterface,
+  CategoryResponseInterface,
+} from './categories.model';
+
+export const CategoryActions = createActionGroup({
+  source: 'Category',
+  events: {
+    // Load Categories
+    'Load Categories': emptyProps(),
+    'Load Categories Success': props<{ response: CategoryResponseInterface }>(),
+    'Load Categories Failure': props<{ error: string }>(),
+
+    // Create Category
+    'Create Category': props<{ categoryData: CategoryRequestInterface }>(),
+    'Create Category Success': props<{ category: Categories }>(), // Single category
+    'Create Category Failure': props<{ error: CategoryErrorInterface }>(),
+
+    // Update Category
+    'Update Category': props<{ categoryId: string; categoryData: CategoryRequestInterface }>(),
+    'Update Category Success': props<{ category: Categories }>(), // Single category
+    'Update Category Failure': props<{ error: string }>(),
+
+    // Delete Category
+    'Delete Category': props<{ categoryId: string }>(),
+    'Delete Category Success': props<{ categoryId: string; response: { message: string } }>(),
+    'Delete Category Failure': props<{ error: string }>(),
+  },
+});
+
+
+// File: src\app\mainlayout\pages\categories\ngrx\categories.effects.ts
+import { Injectable } from '@angular/core';
+import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { catchError, map, mergeMap } from 'rxjs/operators';
+import { of } from 'rxjs';
+import { CategoryService } from './categories.service';
+import { CategoryActions } from './categories.actions';
+import { CategoryResponseInterface } from './categories.model';
+
+@Injectable()
+export class CategoryEffects {
+  constructor(private actions$: Actions, private categoryService: CategoryService) {}
+
+  // Load Categories
+  loadCategories$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(CategoryActions.loadCategories), // Triggered by loadCategories action
+      mergeMap(() =>
+        this.categoryService.getCategories().pipe(
+          map((response: CategoryResponseInterface) => {
+            return CategoryActions.loadCategoriesSuccess({ response }); // Dispatch success action
+          }),
+          catchError((error) => {
+         
+            return of(CategoryActions.loadCategoriesFailure({ error: error.message || 'Unknown error' })); // Dispatch failure action
+          })
+        )
+      )
+    )
+  );
+  
+  
+
+  // Create Category
+  createCategory$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(CategoryActions.createCategory),
+      mergeMap((action) =>
+        this.categoryService.createCategory(action.categoryData).pipe(
+          map((category) => CategoryActions.createCategorySuccess({ category })), // Pass single category
+          catchError((error) =>
+            of(CategoryActions.createCategoryFailure({ error }))
+          )
+        )
+      )
+    )
+  );
+
+  refreshCategoriesAfterCreate$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(CategoryActions.createCategorySuccess),
+      map(() => CategoryActions.loadCategories())
+    )
+  );
+
+  // Update Category
+  updateCategory$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(CategoryActions.updateCategory),
+      mergeMap((action) =>
+        this.categoryService.updateCategory(action.categoryId, action.categoryData).pipe(
+          map((category) => CategoryActions.updateCategorySuccess({ category })), // Pass single category
+          catchError((error) =>
+            of(CategoryActions.updateCategoryFailure({ error: error.message }))
+          )
+        )
+      )
+    )
+  );
+
+  refreshCategoriesAfterUpdate$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(CategoryActions.updateCategorySuccess),
+      map(() => CategoryActions.loadCategories())
+    )
+  );
+
+  // Delete Category
+  deleteCategory$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(CategoryActions.deleteCategory),
+      mergeMap((action) =>
+        this.categoryService.deleteCategory(action.categoryId).pipe(
+          map((response) =>
+            CategoryActions.deleteCategorySuccess({
+              categoryId: action.categoryId,
+              response,
+            })
+          ),
+          catchError((error) =>
+            of(CategoryActions.deleteCategoryFailure({ error: error.message }))
+          )
+        )
+      )
+    )
+  );
+
+  refreshCategoriesAfterDelete$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(CategoryActions.deleteCategorySuccess),
+      map(() => CategoryActions.loadCategories())
+    )
+  );
+}
+
+
+// File: src\app\mainlayout\pages\categories\ngrx\categories.model.ts
+export interface Categories {
+    category_id: string; // Unique identifier for the category
+    category_name: string; // Name of the category
+    date_created: string; // ISO string format for creation date
+    created_by: string; // User who created the category
+    group_tag: string; // Group tag for the category
+  }
+  
+  export interface CategoryRequestInterface {
+    category_name: string; // Payload for creating/updating a category
+  }
+
+  export interface CategoryErrorInterface {
+    data: {
+        error: string;
+    }
+  }
+  
+  export interface CategoryResponseInterface {
+    data: Categories[]; 
+  }
+  
+  export interface CategoryState {
+    categories: Categories[]; // List of categories
+    loading: boolean; // Indicates if data is being loaded
+    isSubmitting: boolean; // Indicates if a create/update operation is in progress
+    error: string | null; // Error message if something goes wrong
+    successMessage: string | null; // Success message for UI notifications
+  }
+  
+
+// File: src\app\mainlayout\pages\categories\ngrx\categories.reducers.ts
+import { createFeature, createReducer, on } from '@ngrx/store';
+import { CategoryState } from './categories.model';
+import { CategoryActions } from './categories.actions';
+
+const initialState: CategoryState = {
+  categories: [],
+  loading: false,
+  isSubmitting: false,
+  error: null,
+  successMessage: null,
+};
+
+export const categoryFeature = createFeature({
+  name: 'category',
+  reducer: createReducer(
+    initialState,
+
+    // Load Categories
+    on(CategoryActions.loadCategories, (state) => ({
+      ...state,
+      loading: true,
+      error: null,
+    })),
+    on(CategoryActions.loadCategoriesSuccess, (state, { response }) => ({
+      ...state,
+      loading: false,
+      categories: response.data,
+      successMessage: 'Categories loaded successfully',
+    })),
+    on(CategoryActions.loadCategoriesFailure, (state, { error }) => ({
+      ...state,
+      loading: false,
+      error,
+    })),
+
+    // Create Category
+    on(CategoryActions.createCategory, (state) => ({
+      ...state,
+      isSubmitting: true,
+      error: null,
+    })),
+    on(CategoryActions.createCategorySuccess, (state, { category }) => ({
+      ...state,
+      isSubmitting: false,
+      categories: [...state.categories, category], // Add single category
+      successMessage: 'Category created successfully',
+    })),
+    on(CategoryActions.createCategoryFailure, (state, { error }) => ({
+      ...state,
+      isSubmitting: false,
+      error: error.data.error,
+    })),
+
+    // Update Category
+    on(CategoryActions.updateCategory, (state) => ({
+      ...state,
+      isSubmitting: true,
+      error: null,
+    })),
+    on(CategoryActions.updateCategorySuccess, (state, { category }) => ({
+      ...state,
+      isSubmitting: false,
+      categories: state.categories.map((c) =>
+        c.category_id === category.category_id ? category : c
+      ),
+      successMessage: 'Category updated successfully',
+    })),
+    on(CategoryActions.updateCategoryFailure, (state, { error }) => ({
+      ...state,
+      isSubmitting: false,
+      error,
+    })),
+
+    // Delete Category
+    on(CategoryActions.deleteCategory, (state) => ({
+      ...state,
+      isSubmitting: true,
+      error: null,
+    })),
+    on(CategoryActions.deleteCategorySuccess, (state, { categoryId }) => ({
+      ...state,
+      isSubmitting: false,
+      categories: state.categories.filter((c) => c.category_id !== categoryId),
+      successMessage: 'Category deleted successfully',
+    })),
+    on(CategoryActions.deleteCategoryFailure, (state, { error }) => ({
+      ...state,
+      isSubmitting: false,
+      error,
+    }))
+  ),
+});
+
+export const {
+  name: categoryFeatureKey,
+  reducer: categoryReducer,
+  selectCategories,
+  selectLoading,
+  selectIsSubmitting,
+  selectError,
+  selectSuccessMessage,
+} = categoryFeature;
+
+
+// File: src\app\mainlayout\pages\categories\ngrx\categories.service.ts
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { catchError, map, Observable } from 'rxjs';
+import {
+  Categories,
+  CategoryRequestInterface,
+  CategoryResponseInterface,
+} from './categories.model';
+import { environment } from 'src/environment/environment';
+
+@Injectable({
+  providedIn: 'root',
+})
+export class CategoryService {
+  private apiUrl = `${environment.apiUrl}/categories`; // Endpoint for fetching categories
+  private createUpdateUrl = `${environment.apiUrl}/category`; // Endpoint for create, update, delete
+
+  constructor(private http: HttpClient) {}
+
+  /**
+   * Get all categories
+   * @returns Observable<CategoryResponseInterface>
+   */
+  getCategories(): Observable<CategoryResponseInterface> {
+    const token = localStorage.getItem('authToken');
+
+    // Set headers with the Authorization token and X-Request-ID
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`, // Include the token as a Bearer token
+      'X-Request-ID': '1', // Include the required X-Request-ID header
+    });
+
+    return this.http.get<CategoryResponseInterface>(this.apiUrl, { headers });
+  }
+  
+
+  /**
+   * Create a new category
+   * @param categoryData Data for creating a new category
+   * @returns Observable<Categories>
+   */
+  createCategory(categoryData: CategoryRequestInterface): Observable<Categories> {
+    const token = localStorage.getItem('authToken');
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`,
+      'X-Request-ID': '1',
+    });
+    return this.http.post<Categories>(this.createUpdateUrl, categoryData, { headers });
+  }
+
+  /**
+   * Update an existing category
+   * @param categoryId ID of the category to update
+   * @param categoryData Updated category data
+   * @returns Observable<Categories>
+   */
+  updateCategory(categoryId: string, categoryData: CategoryRequestInterface): Observable<Categories> {
+    const token = localStorage.getItem('authToken');
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`,
+      'X-Request-ID': '1',
+    });
+    return this.http.put<Categories>(`${this.createUpdateUrl}/${categoryId}`, categoryData, { headers });
+  }
+
+  /**
+   * Delete a category by ID
+   * @param categoryId ID of the category to delete
+   * @returns Observable<{ message: string }>
+   */
+  deleteCategory(categoryId: string): Observable<{ message: string }> {
+    const token = localStorage.getItem('authToken');
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`,
+      'X-Request-ID': '1',
+    });
+    return this.http.delete<{ message: string }>(`${this.createUpdateUrl}/${categoryId}`, { headers });
+  }
+}
+
+
+// File: src\app\mainlayout\pages\products\ngrx\products.actions.ts
+import { createActionGroup, emptyProps, props } from '@ngrx/store';
+import { Product, ProductRequest, ProductResponse } from './products.models';
+
+export const ProductActions = createActionGroup({
+  source: 'Product',
+  events: {
+    // Load Products
+    'Load Products': emptyProps(), // No additional payload required
+    'Load Products Success': props<{ response: ProductResponse }>(),
+    'Load Products Failure': props<{ error: string }>(),
+
+    // Create Product
+    'Create Product': props<{ product: ProductRequest }>(),
+    'Create Product Success': props<{ product: Product }>(),
+    'Create Product Failure': props<{ error: string }>(),
+
+    // Update Product
+    'Update Product': props<{ productId: string; product: ProductRequest }>(),
+    'Update Product Success': props<{ product: Product }>(),
+    'Update Product Failure': props<{ error: string }>(),
+
+    // Delete Product
+    'Delete Product': props<{ productId: string }>(),
+    'Delete Product Success': props<{ productId: string }>(),
+    'Delete Product Failure': props<{ error: string }>(),
+  },
+});
+
+
+// File: src\app\mainlayout\pages\products\ngrx\products.effects.ts
+import { Injectable } from '@angular/core';
+import { Actions, createEffect, ofType } from '@ngrx/effects';
+
+import { catchError, map, mergeMap } from 'rxjs/operators';
+import { of } from 'rxjs';
+import { ProductService } from './products.service';
+import { ProductActions } from './products.actions';
+
+@Injectable()
+export class ProductEffects {
+  constructor(private actions$: Actions, private productService: ProductService) {}
+
+  // Load Products
+  loadProducts$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(ProductActions.loadProducts),
+      mergeMap(() =>
+        this.productService.getProducts().pipe(
+          map((response) => ProductActions.loadProductsSuccess({ response })),
+          catchError((error) =>
+            of(ProductActions.loadProductsFailure({ error: error.message }))
+          )
+        )
+      )
+    )
+  );
+
+  // Create Product
+  createProduct$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(ProductActions.createProduct),
+      mergeMap((action) =>
+        this.productService.createProduct(action.product).pipe(
+          map((product) => ProductActions.createProductSuccess({ product })),
+          catchError((error) =>
+            of(ProductActions.createProductFailure({ error: error.message }))
+          )
+        )
+      )
+    )
+  );
+
+  // Update Product
+  updateProduct$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(ProductActions.updateProduct),
+      mergeMap((action) =>
+        this.productService.updateProduct(action.productId, action.product).pipe(
+          map((product) => ProductActions.updateProductSuccess({ product })),
+          catchError((error) =>
+            of(ProductActions.updateProductFailure({ error: error.message }))
+          )
+        )
+      )
+    )
+  );
+
+  // Delete Product
+  deleteProduct$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(ProductActions.deleteProduct),
+      mergeMap((action) =>
+        this.productService.deleteProduct(action.productId).pipe(
+          map(() =>
+            ProductActions.deleteProductSuccess({ productId: action.productId })
+          ),
+          catchError((error) =>
+            of(ProductActions.deleteProductFailure({ error: error.message }))
+          )
+        )
+      )
+    )
+  );
+}
+
+
+// File: src\app\mainlayout\pages\products\ngrx\products.models.ts
+// Represents a single product in the system
+export interface Product {
+    product_id: string;
+    product_name: string;
+    product_img: string;
+    product_description: string;
+    price: number;
+    currency: string;
+    category: string[]; // Array of category IDs
+    created_by: string;
+    other_details: OtherDetails;
+  }
+  
+  // Represents the "other_details" property for a product
+  export interface OtherDetails {
+    size: string;
+    short: string;
+  }
+  
+  // Request format for creating or updating a product
+  export interface ProductRequest {
+    product_name: string;
+    product_img: string;
+    product_description: string;
+    price: number;
+    currency: string;
+    category: string[];
+    created_by: string;
+    other_details: OtherDetails;
+  }
+  
+  // Response format from the API when loading products
+  export interface ProductResponse {
+    data: Product[]; // Array of products
+    message: string; // Success or status message from the API
+  }
+  
+  // NgRx state interface for managing products
+  export interface ProductState {
+    products: Product[]; // List of products
+    loading: boolean; // For indicating loading state
+    isSubmitting: boolean; // For indicating submission state (create, update, delete)
+    error: string | null; // Error message, if any
+    successMessage: string | null; // Success message, if any
+  } 
+  
+
+// File: src\app\mainlayout\pages\products\ngrx\products.reducers.ts
+import { createFeature, createReducer, on } from '@ngrx/store';
+import { ProductState } from './products.models';
+import { ProductActions } from './products.actions';
+
+const initialState: ProductState = {
+  products: [],
+  loading: false,
+  isSubmitting: false,
+  error: null,
+  successMessage: null,
+};
+
+export const productFeature = createFeature({
+  name: 'product',
+  reducer: createReducer(
+    initialState,
+
+    // Load Products
+    on(ProductActions.loadProducts, (state) => ({
+      ...state,
+      loading: true,
+      error: null,
+    })),
+    on(ProductActions.loadProductsSuccess, (state, { response }) => ({
+      ...state,
+      loading: false,
+      products: response.data,
+      successMessage: 'Products loaded successfully',
+    })),
+    on(ProductActions.loadProductsFailure, (state, { error }) => ({
+      ...state,
+      loading: false,
+      error,
+    })),
+
+    // Create Product
+    on(ProductActions.createProduct, (state) => ({
+      ...state,
+      isSubmitting: true,
+      error: null,
+    })),
+    on(ProductActions.createProductSuccess, (state, { product }) => ({
+      ...state,
+      isSubmitting: false,
+      products: [...state.products, product], // Add single product
+      successMessage: 'Product created successfully',
+    })),
+    on(ProductActions.createProductFailure, (state, { error }) => ({
+      ...state,
+      isSubmitting: false,
+      error,
+    })),
+
+    // Update Product
+    on(ProductActions.updateProduct, (state) => ({
+      ...state,
+      isSubmitting: true,
+      error: null,
+    })),
+    on(ProductActions.updateProductSuccess, (state, { product }) => ({
+      ...state,
+      isSubmitting: false,
+      products: state.products.map((p) =>
+        p.product_name === product.product_name ? product : p
+      ),
+      successMessage: 'Product updated successfully',
+    })),
+    on(ProductActions.updateProductFailure, (state, { error }) => ({
+      ...state,
+      isSubmitting: false,
+      error,
+    })),
+
+    // Delete Product
+    on(ProductActions.deleteProduct, (state) => ({
+      ...state,
+      isSubmitting: true,
+      error: null,
+    })),
+    on(ProductActions.deleteProductSuccess, (state, { productId }) => ({
+      ...state,
+      isSubmitting: false,
+      products: state.products.filter((p) => p.product_name !== productId),
+      successMessage: 'Product deleted successfully',
+    })),
+    on(ProductActions.deleteProductFailure, (state, { error }) => ({
+      ...state,
+      isSubmitting: false,
+      error,
+    }))
+  ),
+});
+
+export const {
+  name: productFeatureKey,
+  reducer: productReducer,
+  selectProducts,
+  selectLoading,
+  selectIsSubmitting,
+  selectError,
+  selectSuccessMessage,
+} = productFeature;
+
+
+// File: src\app\mainlayout\pages\products\ngrx\products.service.ts
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { Product, ProductRequest, ProductResponse } from './products.models';
+import { environment } from 'src/environment/environment';
+
+@Injectable({
+  providedIn: 'root',
+})
+export class ProductService {
+  private apiUrl = `${environment.apiUrl}/products`; // Endpoint for fetching products
+  private createUpdateUrl = `${environment.apiUrl}/product`; // Endpoint for create, update, delete
+
+  constructor(private http: HttpClient) {}
+
+  /**
+   * Get all products
+   * @returns Observable<ProductResponse>
+   */
+  getProducts(): Observable<ProductResponse> {
+    const token = localStorage.getItem('authToken');
+
+    // Set headers with the Authorization token and X-Request-ID
+    const headers = new HttpHeaders({
+      Authorization: `Bearer ${token}`, // Include the token as a Bearer token
+      'X-Request-ID': '1', // Include the required X-Request-ID header
+    });
+
+    return this.http.get<ProductResponse>(this.apiUrl, { headers });
+  }
+
+  /**
+   * Create a new product
+   * @param productData Data for creating a new product
+   * @returns Observable<Product>
+   */
+  createProduct(productData: ProductRequest): Observable<Product> {
+    const token = localStorage.getItem('authToken');
+    const headers = new HttpHeaders({
+      Authorization: `Bearer ${token}`,
+      'X-Request-ID': '1',
+    });
+    return this.http.post<Product>(this.createUpdateUrl, productData, { headers });
+  }
+
+  /**
+   * Update an existing product
+   * @param productId ID of the product to update
+   * @param productData Updated product data
+   * @returns Observable<Product>
+   */
+  updateProduct(productId: string, productData: ProductRequest): Observable<Product> {
+    const token = localStorage.getItem('authToken');
+    const headers = new HttpHeaders({
+      Authorization: `Bearer ${token}`,
+      'X-Request-ID': '1',
+    });
+    return this.http.put<Product>(`${this.createUpdateUrl}/${productId}`, productData, { headers });
+  }
+
+  /**
+   * Delete a product by ID
+   * @param productId ID of the product to delete
+   * @returns Observable<{ message: string }>
+   */
+  deleteProduct(productId: string): Observable<{ message: string }> {
+    const token = localStorage.getItem('authToken');
+    const headers = new HttpHeaders({
+      Authorization: `Bearer ${token}`,
+      'X-Request-ID': '1',
+    });
+    return this.http.delete<{ message: string }>(`${this.createUpdateUrl}/${productId}`, { headers });
+  }
+}
+
+
+// File: src\app\mainlayout\pages\products\productmodal\productmodal.component.html
+<div class="product-form-container">
+    <h2>Product Form</h2>
+    <form [formGroup]="productForm" (ngSubmit)="onSubmit()">
+      <!-- Product Name -->
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Product Name</mat-label>
+        <input
+          matInput
+          id="product_name"
+          formControlName="product_name"
+          placeholder="Enter product name"
+        />
+        <mat-error *ngIf="productForm.get('product_name')?.invalid">
+          Product name is required
+        </mat-error>
+      </mat-form-field>
+  
+      <!-- Product Image -->
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Product Image URL</mat-label>
+        <input
+          matInput
+          id="product_img"
+          formControlName="product_img"
+          placeholder="Enter product image URL"
+        />
+      </mat-form-field>
+  
+      <!-- Product Description -->
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Product Description</mat-label>
+        <textarea
+          matInput
+          id="product_description"
+          formControlName="product_description"
+          placeholder="Enter product description"
+          rows="4"
+        ></textarea>
+      </mat-form-field>
+  
+      <!-- Price -->
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Price</mat-label>
+        <input
+          matInput
+          type="number"
+          id="price"
+          formControlName="price"
+          placeholder="Enter product price"
+        />
+      </mat-form-field>
+  
+      <!-- Currency -->
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Currency</mat-label>
+        <mat-select id="currency" formControlName="currency">
+          <mat-option value="php">PHP</mat-option>
+          <mat-option value="usd">USD</mat-option>
+          <mat-option value="eur">EUR</mat-option>
+        </mat-select>
+      </mat-form-field>
+  
+      <!-- Categories -->
+      <div class="form-group">
+        <label>Categories</label>
+        <div *ngFor="let category of categories.controls; let i = index" class="category-row">
+          <mat-form-field appearance="outline" class="category-input">
+            <input
+              matInput
+              [formControlName]="i"
+              placeholder="Enter category ID"
+            />
+          </mat-form-field>
+          <button mat-icon-button color="warn" (click)="removeCategory(i)">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </div>
+        <button mat-button color="primary" (click)="addCategory()">Add Category</button>
+      </div>
+  
+      <!-- Created By -->
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Created By</mat-label>
+        <input
+          matInput
+          id="created_by"
+          formControlName="created_by"
+          placeholder="Enter creator's name"
+        />
+      </mat-form-field>
+  
+      <!-- Other Details -->
+      <fieldset>
+        <legend>Other Details</legend>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Size</mat-label>
+          <input
+            matInput
+            id="size"
+            formControlName="size"
+            placeholder="Enter size"
+          />
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Short</mat-label>
+          <input
+            matInput
+            id="short"
+            formControlName="short"
+            placeholder="Enter short"
+          />
+        </mat-form-field>
+      </fieldset>
+  
+      <!-- Submit Button -->
+      <button mat-raised-button color="primary" type="submit" [disabled]="productForm.invalid">
+        Submit
+      </button>
+    </form>
+  </div>
+  
+
+// File: src\app\mainlayout\pages\products\productmodal\productmodal.component.ts
+import { CommonModule } from '@angular/common';
+import { Component, OnInit } from '@angular/core';
+import { FormBuilder, FormGroup, FormArray, Validators, ReactiveFormsModule } from '@angular/forms';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
+
+@Component({
+  selector: 'app-product-form',
+  templateUrl: './productmodal.component.html',
+  styleUrls: ['./productmodal.component.scss'],
+  imports: [
+    MatFormFieldModule,
+    MatSelectModule,
+    MatIconModule,
+    CommonModule,
+    MatInputModule,
+    ReactiveFormsModule
+  ],
+  standalone: true
+})
+export class ProductsModalComponent implements OnInit {
+  productForm: FormGroup;
+
+  constructor(private fb: FormBuilder) {
+    this.productForm = this.fb.group({
+      product_name: ['', Validators.required],
+      product_img: [''],
+      product_description: [''],
+      price: [0, [Validators.required, Validators.min(0)]],
+      currency: ['php', Validators.required],
+      category: this.fb.array([]), // Dynamic array for categories
+      created_by: ['', Validators.required],
+      other_details: this.fb.group({
+        size: [''],
+        short: [''],
+      }),
+    });
+  }
+
+  ngOnInit(): void {}
+
+  get categories(): FormArray {
+    return this.productForm.get('category') as FormArray;
+  }
+
+  addCategory(): void {
+    this.categories.push(this.fb.control(''));
+  }
+
+  removeCategory(index: number): void {
+    this.categories.removeAt(index);
+  }
+
+  onSubmit(): void {
+    if (this.productForm.valid) {
+      console.log('Form Submitted:', this.productForm.value);
+    }
+  }
+}
+
+
+// File: src\app\mainlayout\pages\products\products.component.html
+<div class="products-container">
+    <!-- Page Header -->
+    <div class="header">
+      <h2>Products</h2>
+      <button mat-raised-button color="primary" (click)="openAddCategoryModal()">Add Product</button>
+    </div>
+  
+    <!-- Search Bar -->
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Search Products</mat-label>
+      <input
+        matInput
+        [formControl]="searchControl"
+        placeholder="Search by product name, category, etc."
+      />
+      <button mat-icon-button *ngIf="searchControl.value" matSuffix (click)="searchControl.reset()">
+        <mat-icon>close</mat-icon>
+      </button>
+    </mat-form-field>
+
+          <!-- Loading Indicator -->
+  <div *ngIf="isLoading$ | async" class="loading">
+    Loading users...
+  </div>
+
+  <!-- Error Message -->
+  <div *ngIf="error$ | async as error" class="error">
+    Error: {{ error }}
+  </div>
+  
+    <!-- Products Table -->
+    <mat-table [dataSource]="dataSource" class="mat-elevation-z8" matSort>
+      <!-- Product ID Column -->
+      <ng-container matColumnDef="product_id">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Product ID</mat-header-cell>
+        <mat-cell *matCellDef="let product">{{ product.product_id }}</mat-cell>
+      </ng-container>
+  
+      <!-- Product Name Column -->
+      <ng-container matColumnDef="product_name">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Product Name</mat-header-cell>
+        <mat-cell *matCellDef="let product">{{ product.product_name }}</mat-cell>
+      </ng-container>
+  
+      <!-- Product Image Column -->
+      <ng-container matColumnDef="product_img">
+        <mat-header-cell *matHeaderCellDef>Image</mat-header-cell>
+        <mat-cell *matCellDef="let product">
+          <img
+            [src]="product.product_img"
+            alt="{{ product.product_name }}"
+            width="50"
+            height="50"
+          />
+        </mat-cell>
+      </ng-container>
+  
+      <!-- Product Description Column -->
+      <ng-container matColumnDef="product_description">
+        <mat-header-cell *matHeaderCellDef>Description</mat-header-cell>
+        <mat-cell *matCellDef="let product">{{ product.product_description }}</mat-cell>
+      </ng-container>
+  
+      <!-- Category Column -->
+      <ng-container matColumnDef="category">
+        <mat-header-cell *matHeaderCellDef>Category</mat-header-cell>
+        <mat-cell *matCellDef="let product">{{ product.category.join(', ') }}</mat-cell>
+      </ng-container>
+  
+      <!-- Price Column -->
+      <ng-container matColumnDef="price">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Price</mat-header-cell>
+        <mat-cell *matCellDef="let product">{{ product.price | currency:product.currency }}</mat-cell>
+      </ng-container>
+  
+      <!-- Currency Column -->
+      <ng-container matColumnDef="currency">
+        <mat-header-cell *matHeaderCellDef>Currency</mat-header-cell>
+        <mat-cell *matCellDef="let product">{{ product.currency }}</mat-cell>
+      </ng-container>
+  
+      <!-- Date Created Column -->
+      <ng-container matColumnDef="date_created">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Date Created</mat-header-cell>
+        <mat-cell *matCellDef="let product">{{ product.date_created | date }}</mat-cell>
+      </ng-container>
+  
+      <!-- Actions Column -->
+      <ng-container matColumnDef="actions">
+        <mat-header-cell *matHeaderCellDef>Actions</mat-header-cell>
+        <mat-cell *matCellDef="let product">
+          <button mat-icon-button color="primary" (click)="openEditCategoryModal(product)">
+            <mat-icon>edit</mat-icon>
+          </button>
+          <button mat-icon-button color="warn" (click)="onDeleteCategory(product.product_id)">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </mat-cell>
+      </ng-container>
+  
+      <!-- Table Headers and Rows -->
+      <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+      <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
+    </mat-table>
+  
+    <!-- Paginator -->
+    <mat-paginator
+      [pageSizeOptions]="[5, 10, 20]"
+      showFirstLastButtons
+    ></mat-paginator>
+  </div>
+  
+
+// File: src\app\mainlayout\pages\products\products.component.ts
+import { Component, OnInit, ViewChild } from '@angular/core';
+import { Store } from '@ngrx/store';
+import { Observable } from 'rxjs';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
+import { MatTableDataSource, MatTableModule } from '@angular/material/table';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import {ProductActions} from '../products/ngrx/products.actions'
+
+import { CommonModule } from '@angular/common';
+import { MatButtonModule } from '@angular/material/button';
+import { MatInputModule } from '@angular/material/input';
+import { MatIconModule } from '@angular/material/icon';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { selectError, selectLoading, selectProducts, selectSuccessMessage } from './ngrx/products.reducers';
+import { Product } from './ngrx/products.models';
+import { ProductsModalComponent } from './productmodal/productmodal.component';
+
+
+@Component({
+  selector: 'app-products',
+  templateUrl: './products.component.html',
+  styleUrls: ['./products.component.scss'],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,// Import MatTableModule for displaying tables
+    MatPaginatorModule,
+    MatDialogModule,
+    MatIconModule,
+    MatSnackBarModule,
+    MatFormFieldModule,
+    MatTableModule
+  ],
+  standalone: true
+})
+export class ProductsComponent implements OnInit  {
+  products$: Observable<Product[]>;
+  isLoading$: Observable<boolean>;
+  error$: Observable<string | null>;
+  message$: Observable<string | null>;
+
+  searchControl = new FormControl('');
+  dataSource = new MatTableDataSource<Product>();
+  displayedColumns = ['product_id', 'product_name', 'product_img', 'product_description', 'category', 'price', 'currency', 'date_created', 'category_name'];
+
+  @ViewChild(MatPaginator) paginator!: MatPaginator;
+
+  constructor(
+    private store: Store,
+    private dialog: MatDialog,
+    private snackBar: MatSnackBar
+  ) {
+    this.products$ = this.store.select(selectProducts);
+    this.isLoading$ = this.store.select(selectLoading);
+    this.error$ = this.store.select(selectError);
+    this.message$ = this.store.select(selectSuccessMessage);
+  }
+
+  ngOnInit(): void {
+      this.store.dispatch(ProductActions.loadProducts());
+      this.setupSubscriptions();
+  }
+
+
+  private setupSubscriptions(): void {
+    
+    this.products$.subscribe((response) => {
+      if (response) {
+        this.dataSource.data = response; // Ensure the dataSource gets the array of categories
+        this.dataSource.paginator = this.paginator;
+      }
+    });
+
+    this.error$.subscribe((error) => {
+      if (error) {
+        console.error('Error received in component:', error); // Log the error
+        this.showSnackbar(error); // Optionally show the error in the UI
+      }
+    });
+    
+    
+
+    this.searchControl.valueChanges.subscribe((value) => {
+      const filterValue = value ? value.trim().toLowerCase() : ''; // Default to an empty string if value is null
+      this.dataSource.filter = filterValue;
+      if (this.dataSource.paginator) {
+        this.dataSource.paginator.firstPage();
+      }
+    });
+    
+
+    // Show success or error messages
+    this.message$.subscribe((message) => {
+      if (message) {
+        this.showSnackbar(message);
+      }
+    });
+  }
+
+  openAddCategoryModal(): void {
+    const dialogRef = this.dialog.open(ProductsModalComponent, {
+      width: '600px',
+      data: null,
+    });
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (result) {
+        this.store.dispatch(ProductActions.createProduct({ product: result }));
+      }
+    });
+  }
+
+  openEditCategoryModal(product: Product): void {
+    const dialogRef = this.dialog.open(ProductsModalComponent, {
+      width: '600px',
+      data: product, // Pre-fill the modal with existing category data
+    });
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (result) {
+        this.store.dispatch(
+          ProductActions.updateProduct({
+            productId: product.product_id,
+            product: result,
+          })
+        );
+      }
+    });
+  }
+
+  onDeleteCategory(productId: string): void {
+    if (confirm('Are you sure you want to delete this category?')) {
+      this.store.dispatch(ProductActions.deleteProduct({ productId }));
+    }
+  }
+
+  private showSnackbar(message: string): void {
+    this.snackBar.open(message, 'Close', {
+      duration: 3000,
+      verticalPosition: 'top',
+      horizontalPosition: 'center',
+    });
+  }
+}
+
+
+
+
+// File: src\app\mainlayout\pages\transactions\transactions.component.html
+
+
+// File: src\app\mainlayout\pages\transactions\transactions.component.ts
+import { Component } from '@angular/core';
+import { MatSidenavModule } from '@angular/material/sidenav';
+import { MatToolbarModule } from '@angular/material/toolbar';
+import { MatIconModule } from '@angular/material/icon';
+import { MatListModule } from '@angular/material/list';
+import { MatButtonModule } from '@angular/material/button';
+import { RouterModule } from '@angular/router';
+import { CommonModule } from '@angular/common';
+
+@Component({
+  selector: 'app-products',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatSidenavModule,
+    MatToolbarModule,
+    MatIconModule,
+    MatListModule,
+    MatButtonModule,
+    RouterModule, // Import RouterModule for navigation
+  ],
+  templateUrl: './transactions.component.html',
+  styleUrls: ['./transactions.component.scss'],
+})
+export class TransactionsComponent {
+  // Here we can add any component-specific logic if needed
+}
+
+
+// File: src\app\mainlayout\pages\users\user-form\user-form.component.html
+<h2>{{ isEditMode ? 'Edit User' : 'Add New User' }}</h2>
+
+<form [formGroup]="userForm" (ngSubmit)="onSubmit()">
+  <mat-form-field appearance="outline">
+    <mat-label>First Name</mat-label>
+    <input matInput formControlName="first_name" required />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Last Name</mat-label>
+    <input matInput formControlName="last_name" required />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Contact Number</mat-label>
+    <input matInput formControlName="contact_number" required />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Address</mat-label>
+    <input matInput formControlName="address" required />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Username</mat-label>
+    <input matInput formControlName="username" required />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Password</mat-label>
+    <input matInput formControlName="password" type="password" [required]="!isEditMode" />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Access Level</mat-label>
+    <mat-select formControlName="access_level" required>
+      <mat-option *ngFor="let level of accessLevels" [value]="level.value">
+        {{ level.viewValue }}
+      </mat-option>
+    </mat-select>
+    <mat-error *ngIf="userForm.get('access_level')?.hasError('required')">
+      Access level is required.
+    </mat-error>
+  </mat-form-field>
+
+  <!-- Image Upload -->
+  <div class="image-upload">
+    <label for="imageInput">Upload Image:</label>
+    <input
+      type="file"
+      id="imageInput"
+      (change)="onFileChange($event)"
+      accept="image/*"
+    />
+    <div *ngIf="imagePreview" class="image-preview">
+      <img [src]="imagePreview" alt="Image Preview" />
+    </div>
+    <mat-error *ngIf="userForm.get('user_img')?.hasError('required')">
+      Image is required.
+    </mat-error>
+  </div>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Position</mat-label>
+    <input matInput formControlName="position" />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Department</mat-label>
+    <input matInput formControlName="department" />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Branch</mat-label>
+    <input matInput formControlName="branch" />
+  </mat-form-field>
+
+  <div class="status-group">
+    <label>Status:</label>
+    <mat-radio-group formControlName="status">
+      <mat-radio-button value="ACTIVE">Active</mat-radio-button>
+      <mat-radio-button value="INACTIVE">Inactive</mat-radio-button>
+    </mat-radio-group>
+    <mat-error *ngIf="userForm.get('status')?.hasError('required')">
+      Status is required.
+    </mat-error>
+  </div>
+
+  <!-- Other form fields for address, username, password, etc. -->
+  <div class="actions">
+
+    <button mat-button (click)="onCancel()">Cancel</button>
+    <button mat-raised-button color="primary" type="submit">{{ isEditMode ? 'Update' : 'Add New' }} User</button>
+  </div>
+
+</form>
+
+
+
+
+// File: src\app\mainlayout\pages\users\user-form\user-form.component.ts
+import { CommonModule } from '@angular/common';
+import { Component, Inject, OnInit } from '@angular/core';
+import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatOptionModule } from '@angular/material/core';
+import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInput, MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
+import { User } from 'src/app/core/user.model';
+import { MatRadioModule } from '@angular/material/radio';
+
+
+@Component({
+  selector: 'app-user-form',
+  templateUrl: './user-form.component.html',
+  styleUrls: ['./user-form.component.scss'],
+  imports: [
+    MatFormFieldModule, 
+    MatInputModule, 
+    MatButtonModule, 
+    ReactiveFormsModule, 
+    MatOptionModule, 
+    MatSelectModule, 
+    MatFormFieldModule,
+    CommonModule,
+    MatRadioModule],
+  standalone: true
+})
+export class UserFormComponent implements OnInit {
+  userForm: FormGroup;
+  isEditMode: boolean = false;
+  imagePreview: string | null = null; // Base64 preview string
+
+  accessLevels = [
+    { value: 'admin', viewValue: 'admin' },
+    { value: 'user', viewValue: 'user' },
+  ];
+
+  constructor(
+    private fb: FormBuilder,
+    private dialogRef: MatDialogRef<UserFormComponent>,
+    @Inject(MAT_DIALOG_DATA) public data: User | null  // Inject data passed to dialog
+  ) {
+    this.isEditMode = !!data;  // If data is provided, it’s edit mode
+    this.userForm = this.fb.group({
+      first_name: [data?.first_name || '', Validators.required],
+      last_name: [data?.last_name || '', Validators.required],
+      contact_number: [
+        data?.contact_number || '',
+        [Validators.required], // Validate for a 10-digit number
+      ],
+      address: [data?.address || '', Validators.required],
+      username: [data?.username || '', Validators.required],
+      password: ['', this.isEditMode ? [] : Validators.required], // Require password only on Add
+      access_level: [data?.access_level || '', Validators.required],
+      user_img: [data?.user_img || '', Validators.required],
+      position: [data?.position || '', Validators.required],
+      department: [data?.department || '', Validators.required],
+      branch: [data?.branch || '', Validators.required],
+      status: [data?.status || '', Validators.required], // Ensure status is a required field
+    });
+    
+  }
+
+  ngOnInit(): void {}
+
+  onFileChange(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input?.files && input.files.length > 0) {
+      const file = input.files[0];
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        this.imagePreview = reader.result as string; // Base64 string for preview
+        this.userForm.patchValue({ user_img: this.imagePreview }); // Update form control
+      };
+      reader.onerror = (error) => {
+        console.error('Error reading file:', error);
+      };
+      reader.readAsDataURL(file); // Convert file to Base64
+    }
+  }
+
+  onSubmit(): void {
+    if (this.userForm.valid) {
+      console.log('Submitting form data:', this.userForm.value);
+      this.dialogRef.close(this.userForm.value); // Close with valid data
+    } else {
+      console.log('Form is invalid:', this.userForm.status); // Log form status
+      console.log('Form errors:', this.getFormValidationErrors()); // Log detailed errors
+      this.userForm.markAllAsTouched(); // Mark all controls as touched to display validation errors
+    }
+  }
+  
+
+  onCancel(): void {
+    this.dialogRef.close();  // Close modal without any data
+  }
+
+  getFormValidationErrors(): string[] {
+    const errors: string[] = [];
+    Object.keys(this.userForm.controls).forEach((key) => {
+      const controlErrors = this.userForm.get(key)?.errors;
+      if (controlErrors) {
+        Object.keys(controlErrors).forEach((keyError) => {
+          errors.push(`Control: ${key}, Error: ${keyError}`);
+        });
+      }
+    });
+    return errors;
+  }
+}
+
+
+// File: src\app\mainlayout\pages\users\user-list.component.html
+<div class="user-list-container">
+  <h1>User Management</h1>
+
+  <!-- Top Controls: Add User Button and Search Bar -->
+  <div class="controls">
+    <button mat-raised-button color="primary" (click)="openAddUserModal()">Add User</button>
+    <mat-form-field appearance="outline" class="search-bar">
+      <mat-label>Search Users</mat-label>
+      <input matInput [formControl]="searchControl" placeholder="Enter name or email" />
+    </mat-form-field>
+  </div>
+
+  <!-- Loading Indicator -->
+  <div *ngIf="isLoading$ | async" class="loading">
+    Loading users...
+  </div>
+
+  <!-- Error Message -->
+  <div *ngIf="error$ | async as error" class="error">
+    Error: {{ error }}
+  </div>
+
+  <!-- User Table -->
+  <table mat-table [dataSource]="dataSource" class="mat-elevation-z8">
+
+    <ng-container matColumnDef="user_img">
+      <th mat-header-cell *matHeaderCellDef> Image </th>
+      <td mat-cell *matCellDef="let user">
+        <img [src]="user.user_img" alt="User Image" class="user-image" />
+      </td>
+    </ng-container>
+    <!-- First Name Column -->
+    <ng-container matColumnDef="first_name">
+      <th mat-header-cell *matHeaderCellDef> First Name </th>
+      <td mat-cell *matCellDef="let user"> {{ user.first_name }} </td>
+    </ng-container>
+
+    <!-- Last Name Column -->
+    <ng-container matColumnDef="last_name">
+      <th mat-header-cell *matHeaderCellDef> Last Name </th>
+      <td mat-cell *matCellDef="let user"> {{ user.last_name }} </td>
+    </ng-container>
+
+    <!-- Username Column -->
+    <ng-container matColumnDef="username">
+      <th mat-header-cell *matHeaderCellDef> Username </th>
+      <td mat-cell *matCellDef="let user"> {{ user.username }} </td>
+    </ng-container>
+
+    <!-- Contact Number Column -->
+    <ng-container matColumnDef="contact_number">
+      <th mat-header-cell *matHeaderCellDef> Contact Number </th>
+      <td mat-cell *matCellDef="let user"> {{ user.contact_number }} </td>
+    </ng-container>
+
+    <!-- Actions Column -->
+<ng-container matColumnDef="actions">
+  <th mat-header-cell *matHeaderCellDef> Actions </th>
+  <td mat-cell *matCellDef="let user">
+    <!-- Edit Button -->
+    <button mat-icon-button color="accent" (click)="openEditUserModal(user)">
+      <mat-icon>edit</mat-icon>
+    </button>
+    
+    <!-- Delete Button -->
+    <button mat-icon-button color="warn" (click)="onDeleteUser(user.user_id)">
+      <mat-icon>delete</mat-icon>
+    </button>
+  </td>
+</ng-container>
+
+    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+    <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+  </table>
+
+  <!-- Pagination Controls -->
+  <mat-paginator [pageSizeOptions]="[5, 10, 20]" showFirstLastButtons></mat-paginator>
+</div>
+
+
+// File: src\app\mainlayout\pages\users\user-list.component.ts
+import { Component, OnInit, ViewChild } from '@angular/core';
+import { Store } from '@ngrx/store';
+import { Observable } from 'rxjs';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import { MatTableDataSource, MatTableModule } from '@angular/material/table';
+import { CommonModule } from '@angular/common';
+import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { User } from 'src/app/core/user.model';
+import { selectError, selectLoading, selectSuccessMessage, selectUsers } from 'src/app/state/users/users.reducer';
+import * as UserActions from '../../../state/users/users.actions';
+import { UserFormComponent } from './user-form/user-form.component';
+import { MatIconModule } from '@angular/material/icon';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+
+@Component({
+  selector: 'app-user-list',
+  templateUrl: './user-list.component.html',
+  styleUrls: ['./user-list.component.scss'],
+  standalone: true,
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatTableModule,  // Import MatTableModule for displaying tables
+    MatPaginatorModule,
+    MatDialogModule,
+    MatIconModule,
+    MatSnackBarModule,
+    MatFormFieldModule
+  ],
+})
+export class UserListComponent implements OnInit {
+  users$: Observable<User[]>;
+  isLoading$: Observable<boolean>;
+  error$: Observable<string | null>;
+  message$: Observable<string | null>;
+
+  searchControl: FormControl = new FormControl('');
+  dataSource: MatTableDataSource<User> = new MatTableDataSource<User>();
+  displayedColumns: string[] = ['user_img','first_name', 'last_name', 'username', 'contact_number', 'actions'];
+
+  @ViewChild(MatPaginator) paginator!: MatPaginator;
+
+  constructor(private store: Store, public dialog: MatDialog, public snackBar: MatSnackBar) {
+    this.users$ = this.store.select(selectUsers);
+    this.isLoading$ = this.store.select(selectLoading);
+    this.error$ = this.store.select(selectError);
+    this.message$ = this.store.select(selectSuccessMessage);
+  }
+
+  ngOnInit(): void {
+    this.store.dispatch(UserActions.loadUsers());
+
+    
+
+    // Load users and set them in the data source
+    this.users$.subscribe(users => {
+      this.dataSource.data = users;
+      this.dataSource.paginator = this.paginator;  // Connect paginator to table data
+    });
+
+    // Filter the table when the search control changes
+    this.searchControl.valueChanges.subscribe(value => {
+      this.dataSource.filter = value.trim().toLowerCase();
+      if (this.dataSource.paginator) {
+        this.dataSource.paginator.firstPage();
+      }
+    });
+
+    this.message$.subscribe(message => {
+      if (message) {
+        this.showSnackbar(message);
+      }
+    });
+  }
+
+  openAddUserModal(): void {
+    const dialogRef = this.dialog.open(UserFormComponent, {
+      width: '600px',
+      data: null
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        console.log("Dispatching createUser action with data:", result);
+        this.store.dispatch(UserActions.createUser({ userData: result }));
+      }
+
+      else{
+        console.log("Dispatching createUser action with data:", result);
+      }
+    });
+  }
+
+    // Open modal to edit an existing user
+    openEditUserModal(user: User): void {
+      const dialogRef = this.dialog.open(UserFormComponent, {
+        width: '600px',
+        data: user  // Pass user data to pre-fill the form
+      });
+  
+      dialogRef.afterClosed().subscribe(result => {
+        if (result) {
+          this.store.dispatch(UserActions.updateUser({ userId: user.user_id, userData: result }));
+        }
+      });
+    }
+
+  onDeleteUser(userId: string): void {
+    if (confirm('Are you sure you want to delete this user?')) {
+      this.store.dispatch(UserActions.deleteUser({ userId }));
+    }
+  }
+
+  private showSnackbar(message: string): void {
+    this.snackBar.open(message, 'Close', {
+      duration: 3000,
+      verticalPosition: 'top',
+      horizontalPosition: 'center'
+    });
+  }
+}
+
+
+// File: src\app\shared\materia;\material.module.ts
+
+
+// File: src\app\state\auth\auth.actions.ts
+import { createActionGroup, props, emptyProps } from '@ngrx/store';
+import { AuthErrorInterface, AuthRequestInterface, AuthResponseInterface, ChangePasswordErrorInterface, ChangePasswordRequestInterface, ChangePasswordResponseInterface, ForgotPasswordRequestInterface, ForgotPasswordResponseInterface, RegisterErrorResponseInterface, RegisterRequestInterface, RegisterResponseInterface } from 'src/app/core/auth.model';
+
+
+export const AuthActions = createActionGroup({
+  source: 'Auth',
+  events: {
+    'Login': props<{ credentials: AuthRequestInterface }>(),
+    'Login Success': props<{ response: AuthResponseInterface }>(),
+    'Login Failure': props<{ error: AuthErrorInterface }>(),
+    'Logout': emptyProps(),
+    'Register': props<{ data: RegisterRequestInterface }>(),
+    'Register Success': props<{ response: RegisterResponseInterface }>(),
+    'Register Failure': props<{ error: RegisterErrorResponseInterface }>(),
+
+    'Verify Username': props<{ data: ForgotPasswordRequestInterface }>(),
+    'Verify Username Success': props<{ response: ForgotPasswordResponseInterface }>(),
+    'Verify USername Failure': props<{ error: RegisterErrorResponseInterface }>(),
+
+    'Change Password': props<{ data: ChangePasswordRequestInterface }>(),
+    'Change Password Success': props<{ response: ChangePasswordResponseInterface }>(),
+    'Change Password Failure': props<{ error: ChangePasswordErrorInterface }>(),
+  }
+});
+
+
+// File: src\app\state\auth\auth.effects.ts
+import { Injectable } from '@angular/core';
+import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { AuthService } from '../../auth/auth.service';
+import { AuthActions } from './auth.actions';
+import { catchError, map, mergeMap, tap } from 'rxjs/operators';
+import { of } from 'rxjs';
+
+import { Router } from '@angular/router';
+import { AuthResponseInterface, ChangePasswordResponseInterface, ForgotPasswordResponseInterface, RegisterResponseInterface } from 'src/app/core/auth.model';
+
+@Injectable()
+export class AuthEffects {
+  constructor(
+    private actions$: Actions,
+    private authService: AuthService,
+    private router: Router
+  ) {}
+
+  // Effect for handling login action
+  login$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(AuthActions.login),
+      mergeMap(action =>
+        this.authService.login(action.credentials).pipe(
+          map((response: AuthResponseInterface) => 
+            AuthActions.loginSuccess({
+              response: {
+                data: {
+                  message: response.data.message,       // Ensure message is provided
+                  token: response.data.token,
+                  user: response.data.user || null     // Ensure user is explicitly set, even if null
+                }
+              }
+            })
+          ),
+          catchError((errorResponse) => {
+            const error = errorResponse.error;
+            return of(AuthActions.loginFailure({ error }));
+          })
+        )
+      )
+    )
+  );
+
+  loginSuccess$ = createEffect(
+    () =>
+      this.actions$.pipe(
+        ofType(AuthActions.loginSuccess),
+        tap(({ response }) => {
+          localStorage.setItem('authToken', response.data.token);
+          this.router.navigate(['/dashboard']);
+        })
+      ),
+    { dispatch: false }
+  );
+
+  logout$ = createEffect(
+    () =>
+      this.actions$.pipe(
+        ofType(AuthActions.logout),
+        mergeMap(() =>
+          this.authService.logout().pipe( // Call the logout API endpoint
+            tap(() => {
+              localStorage.removeItem('authToken');
+              this.router.navigate(['/login']);
+            })
+          )
+        )
+      ),
+    { dispatch: false }
+  );
+
+  register$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(AuthActions.register),
+      mergeMap(action =>
+        this.authService.register(action.data).pipe(
+          map((response: RegisterResponseInterface) => AuthActions.registerSuccess({ response })),
+          catchError((error) => of(AuthActions.registerFailure({ error })))
+        )
+      )
+    )
+  );
+
+  verify$ = createEffect(() =>
+  this.actions$.pipe(
+    ofType(AuthActions.verifyUsername),
+    mergeMap(action =>
+      this.authService.verifyusername(action.data).pipe(
+        map((response: ForgotPasswordResponseInterface) => AuthActions.verifyUsernameSuccess ({ response})),
+        catchError((error) => of(AuthActions.verifyUSernameFailure({error})))
+      )
+    )
+  )
+  
+  );
+
+  changepassword$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(AuthActions.changePassword),
+      mergeMap(action =>
+        this.authService.chnagePassword(action.data).pipe(
+          map((response: ChangePasswordResponseInterface) => AuthActions.changePasswordSuccess({response})),
+          catchError((error) => of(AuthActions.changePasswordFailure({error})))
+        )
+      )
+    )
+    
+    );
+
+
+
+}
+
+
+// File: src\app\state\auth\auth.reducer.ts
+import { createFeature, createReducer, on } from '@ngrx/store';
+import { AuthActions } from './auth.actions';
+import { UserInterface } from 'src/app/core/user.model';
+
+
+// Define the AuthState interface
+export interface AuthState {
+  token: string | null;
+  user: UserInterface | null;
+  errorMessage: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  isSubmitting: boolean;
+  validationErrors: string | null;
+
+  // Registration-specific state
+  registerSuccessMessage: string | null;
+  registerError: string | null;
+
+  verificationSuccessMessage: string | null;
+  verificationFailureMessage: string | null;
+  verificationOTP: string | null;
+
+  //chnagepassword
+  changePasswordMessage: string | null;
+  changePasswordFailure: string | null;
+
+}
+
+// Initial state for the auth feature
+const initialState: AuthState = {
+  token: null,
+  user: null,
+  errorMessage: null,
+  isAuthenticated: false,
+  isLoading: false,
+  isSubmitting: false,
+  validationErrors: null,
+
+  // Registration-specific initial state
+  registerSuccessMessage: null,
+  registerError: null,
+  verificationSuccessMessage: null,
+  verificationFailureMessage: null,
+  verificationOTP: null,
+
+    //chnagepassword
+    changePasswordMessage: null,
+    changePasswordFailure:  null
+};
+
+// Define the auth feature using `authFeature` as the name
+export const authFeature = createFeature({
+  name: 'auth', // Feature key set to 'authFeature'
+  reducer: createReducer(
+    initialState,
+
+    // Handle login action
+    on(AuthActions.login, state => ({
+      ...state,
+      isSubmitting: true,
+      errorMessage: null,
+      validationErrors: null,
+    })),
+
+    // Handle login success
+    on(AuthActions.loginSuccess, (state, { response }) => ({
+      ...state,
+      token: response.data.token,
+      user: response.data.user || null,
+      errorMessage: null,
+      isAuthenticated: true,
+      isSubmitting: false,
+    })),
+
+    // Handle login failure
+    on(AuthActions.loginFailure, (state, { error }) => ({
+      ...state,
+      errorMessage: error.data.error,
+      isAuthenticated: false,
+      isSubmitting: false,
+      validationErrors: error.data.error, // Assuming validation errors are returned as a string
+    })),
+
+    // Handle logout
+    on(AuthActions.logout, () => initialState),
+
+    on(AuthActions.register, state => ({
+        ...state,
+        isSubmitting: true,
+        registerSuccessMessage: null,
+        registerError: null,
+      })),
+  
+      // Handle register success
+      on(AuthActions.registerSuccess, (state, { response }) => ({
+        ...state,
+        registerSuccessMessage: response.data.message, // Store success message
+        registerError: null,
+        isSubmitting: false,
+      })),
+  
+      // Handle register failure
+      on(AuthActions.registerFailure, (state, { error }) => ({
+        ...state,
+        registerSuccessMessage: null,
+        registerError: error.data?.error || 'Registration failed',
+        isSubmitting: false,
+      })),
+
+      // VerifyOTP
+      on(AuthActions.verifyUsername, (state) => ({
+        ...state,
+        verificationSuccessMessage: null,
+        verificationFailureMessage: null,
+        isSubmitting: true,
+      })),
+
+      on(AuthActions.verifyUsernameSuccess, (state, { response }) => ({
+        ...state,
+        verificationSuccessMessage: response.data.message, 
+        verificationOTP: response.data.otp,
+        isSubmitting: false,
+      })),
+  
+  
+      on(AuthActions.verifyUSernameFailure, (state, { error }) => ({
+        ...state,
+        verificationSuccessMessage: null,
+        verificationFailureMessage: error.data?.error || 'Username Verification Failed',
+        isSubmitting: false,
+      })),
+
+      //change password
+      on(AuthActions.changePassword, (state) => ({
+        ...state,
+        isSubmitting: false,
+      })),
+
+      on(AuthActions.changePasswordSuccess, (state, { response }) => ({
+        ...state,
+        changePasswordMessage: response.data.message,
+        isSubmitting: true,
+      })),
+  
+  
+      on(AuthActions.changePasswordFailure, (state, { error }) => ({
+        ...state,
+        changePasswordFailure: error.data?.message || 'Change Password Failed',
+        isSubmitting: false,
+      })),
+  )
+});
+
+// Destructure specific properties from authFeature for easy access
+export const {
+  name: authFeatureKey,        // Feature name
+  reducer: authReducer,        // Reducer function
+  selectIsAuthenticated,       // Selector for `isAuthenticated`
+  selectToken,                 // Selector for `token`
+  selectUser,                  // Selector for `user`
+  selectErrorMessage,          // Selector for `errorMessage`
+  selectIsSubmitting,          // Selector for `isSubmitting`
+  selectIsLoading,             // Selector for `isLoading`
+  selectValidationErrors,      // Selector for `validationErrors`
+  selectRegisterSuccessMessage,         // Selector for registration success message
+  selectRegisterError,                  // Selector for registration error
+  selectVerificationSuccessMessage,
+  selectVerificationFailureMessage,
+  selectVerificationOTP,
+  selectChangePasswordMessage,
+  selectChangePasswordFailure
+} = authFeature;
+
+
+// File: src\app\state\auth\auth.selectors.ts
+import { createFeatureSelector, createSelector } from '@ngrx/store';
+import { AuthState } from './auth.reducer';
+
+export const selectAuthState = createFeatureSelector<AuthState>('auth');
+
+export const selectIsAuthenticated = createSelector(
+  selectAuthState,
+  (state: AuthState) => !!state.token
+);
+
+export const selectAuthToken = createSelector(
+  selectAuthState,
+  (state: AuthState) => state.token
+);
+
+
+// File: src\app\state\category\category.actions.ts
+
+
+// File: src\app\state\category\category.effects.ts
+
+
+// File: src\app\state\category\category.reducer.ts
+
+
+// File: src\app\state\category\category.service.ts
+
+
+// File: src\app\state\users\users.actions.ts
+import { createAction, props } from '@ngrx/store';
+
+
+import { CreateUserRequest, CreateUserResponse, DeleteUserResponse, GetLoggedUserResponse, GetUsersResponse, UpdateUserRequest, User } from 'src/app/core/user.model';
+
+
+// Load LoggedIn User
+export const loadLoggedUser = createAction('[User] Load Logged Users');
+export const loadLoggedSuccess = createAction(
+  '[User] Load Logged Users Success',
+  props<{ response: GetLoggedUserResponse }>()  // Adjust based on actual API response if needed
+);
+export const loadLoggedFailure = createAction(
+  '[User] Load Logged Users Failure',
+  props<{ error: string }>()
+);
+
+
+// Load Users Actions
+export const loadUsers = createAction('[User] Load Users');
+export const loadUsersSuccess = createAction(
+  '[User] Load Users Success',
+  props<{ response: GetUsersResponse }>()  // Adjust based on actual API response if needed
+);
+export const loadUsersFailure = createAction(
+  '[User] Load Users Failure',
+  props<{ error: string }>()
+);
+
+// Create User Actions
+export const createUser = createAction(
+  '[User] Create User',
+  props<{ userData: CreateUserRequest }>()
+);
+export const createUserSuccess = createAction(
+  '[User] Create User Success',
+  props<{ response: CreateUserResponse }>()
+);
+export const createUserFailure = createAction(
+  '[User] Create User Failure',
+  props<{ error: string }>()
+);
+
+// Update User Actions
+export const updateUser = createAction(
+  '[User] Update User',
+  props<{ userId: string; userData: UpdateUserRequest }>()
+);
+export const updateUserSuccess = createAction(
+  '[User] Update User Success',
+  props<{ user: User; }>()
+);
+export const updateUserFailure = createAction(
+  '[User] Update User Failure',
+  props<{ error: string }>()
+);
+
+// Delete User Actions
+export const deleteUser = createAction(
+  '[User] Delete User',
+  props<{ userId: string }>()
+);
+export const deleteUserSuccess = createAction(
+  '[User] Delete User Success',
+  props<{ userId: string; response: DeleteUserResponse }>()
+);
+export const deleteUserFailure = createAction(
+  '[User] Delete User Failure',
+  props<{ error: string }>()
+);
+
+
+// File: src\app\state\users\users.effects.ts
+// src/app/store/effects/user.effects.ts
+
+import { Injectable } from '@angular/core';
+import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { catchError, map, mergeMap, tap } from 'rxjs/operators';
+import { of } from 'rxjs';
+import { UserService } from './users.service';
+import * as UserActions from './users.actions';
+
+
+
+@Injectable()
+export class UserEffects {
+  constructor(private actions$: Actions, private userService: UserService) {}
+
+  // Load Users Effect (GET /users)
+  loadUsers$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(UserActions.loadUsers),
+      mergeMap(() =>
+        this.userService.getUsers().pipe(
+          tap(response => console.log('API response:', response)), // Log the response to verify the structure
+          map((response) => {
+            console.log('Dispatching loadUsersSuccess with response:', response); // Log before dispatching
+            return UserActions.loadUsersSuccess({ response });
+          }),
+          catchError((error) => {
+            console.error('Error loading users:', error); // Log the error
+            return of(UserActions.loadUsersFailure({ error: error.message }));
+          })
+        )
+      )
+    )
+  );
+
+    // Load Logged User Effect (GET /users)
+    loadLoggedUser$ = createEffect(() =>
+      this.actions$.pipe(
+        ofType(UserActions.loadLoggedUser),
+        mergeMap(() =>
+          this.userService.getLoggedUser().pipe(
+          
+            map((response) => {
+            
+              return UserActions.loadLoggedSuccess({ response });
+            }),
+            catchError((error) => {
+            
+              return of(UserActions.loadLoggedFailure({ error: error.message }));
+            })
+          )
+        )
+      )
+    );
+
+  // Create User Effect (POST /user)
+  createUser$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(UserActions.createUser),
+      mergeMap((action) =>
+        this.userService.createUser(action.userData).pipe(
+          map((response) => UserActions.createUserSuccess({ response })),
+          catchError((error) => of(UserActions.createUserFailure({ error: error.message })))
+        )
+      )
+    )
+  );
+
+  refreshUsersAfterCreate$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(UserActions.createUserSuccess),
+      map(() => UserActions.loadUsers())
+    )
+  );
+
+  // Update User Effect (PUT /user/{userId})
+  updateUser$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(UserActions.updateUser),
+      mergeMap((action) =>
+        this.userService.updateUser(action.userId, action.userData).pipe(
+          map((user) => UserActions.updateUserSuccess({ user })),
+          catchError((error) => of(UserActions.updateUserFailure({ error: error.message })))
+        )
+      )
+    )
+  );
+
+  refreshUsersAfterUpdate$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(UserActions.updateUserSuccess),
+      map(() => UserActions.loadUsers())  // Dispatch loadUsers to refresh the list
+    )
+  );
+
+  // Delete User Effect (DELETE /user/{userId})
+  deleteUser$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(UserActions.deleteUser),
+      mergeMap((action) =>
+        this.userService.deleteUser(action.userId).pipe(
+          map((response) => UserActions.deleteUserSuccess({ userId: action.userId, response })),
+          catchError((error) => of(UserActions.deleteUserFailure({ error: error.message })))
+        )
+      )
+    )
+  );
+
+    // Reload the users list after successful deletion
+    refreshUsersAfterDelete$ = createEffect(() =>
+      this.actions$.pipe(
+        ofType(UserActions.deleteUserSuccess),
+        map(() => UserActions.loadUsers())
+      )
+    );
+}
+
+
+// File: src\app\state\users\users.reducer.ts
+// src/app/store/reducers/user.reducer.ts
+
+import { createFeature, createReducer, on } from '@ngrx/store';
+import { UserState } from 'src/app/core/user.model';
+import * as UserActions from './users.actions';
+
+// Define the UserState interface
+
+
+// Initial state for the user feature
+const initialState: UserState = {
+  users: [],
+  selectedUser: null,
+  loading: false,
+  error: null,
+  loggedusers: null,
+
+  // Additional initial state properties
+  isSubmitting: false,
+  successMessage: null,
+  errorMessage: null,
+};
+
+// Define the user feature using `userFeature` as the name
+export const userFeature = createFeature({
+  name: 'user', // Feature key set to 'user'
+  reducer: createReducer(
+    initialState,
+
+    // Load Users
+    on(UserActions.loadUsers, (state) => ({
+      ...state,
+      loading: true,
+      error: null,
+    })),
+    on(UserActions.loadUsersSuccess, (state, { response }) => ({
+      ...state,
+      loading: false,
+      users: response.data.users,
+      successMessage: 'Users loaded successfully', // Optional success message
+    })),
+    on(UserActions.loadUsersFailure, (state, { error }) => ({
+      ...state,
+      loading: false,
+      error: error,
+    })),
+
+        // Load Logged User
+        on(UserActions.loadLoggedUser, (state) => ({
+          ...state,
+          loading: true,
+          error: null,
+        })),
+        on(UserActions.loadLoggedSuccess, (state, { response }) => ({
+          ...state,
+          loading: false,
+          loggedusers: response.data,
+          successMessage: 'Logged User loaded successfully', // Optional success message
+        })),
+        on(UserActions.loadLoggedFailure, (state, { error }) => ({
+          ...state,
+          loading: false,
+          error: error,
+        })),
+
+    // Create User
+    on(UserActions.createUser, (state) => ({
+      ...state,
+      isSubmitting: true,
+      errorMessage: null,
+    })),
+    on(UserActions.createUserSuccess, (state, { response }) => ({
+      ...state,
+      isSubmitting: false,
+      users: [...state.users, response.data.user],
+      successMessage: 'User created successfully', // Optional success message
+    })),
+    on(UserActions.createUserFailure, (state, { error }) => ({
+      ...state,
+      isSubmitting: false,
+      errorMessage: error,
+    })),
+
+    // Update User
+    on(UserActions.updateUser, (state) => ({
+      ...state,
+      isSubmitting: true,
+      errorMessage: null,
+    })),
+    on(UserActions.updateUserSuccess, (state, { user }) => ({
+      ...state,
+      isSubmitting: false,
+      users: state.users.map((u) => (u.user_id === user.user_id ? user : u)),
+      successMessage: 'User updated successfully', // Optional success message
+    })),
+    on(UserActions.updateUserFailure, (state, { error }) => ({
+      ...state,
+      isSubmitting: false,
+      errorMessage: error,
+    })),
+
+    // Delete User
+    on(UserActions.deleteUser, (state) => ({
+      ...state,
+      isSubmitting: true,
+      errorMessage: null,
+    })),
+    on(UserActions.deleteUserSuccess, (state, { userId }) => ({
+      ...state,
+      isSubmitting: false,
+      users: state.users.filter((user) => user.user_id !== userId),
+      successMessage: 'User deleted successfully', // Optional success message
+    })),
+    on(UserActions.deleteUserFailure, (state, { error }) => ({
+      ...state,
+      isSubmitting: false,
+      errorMessage: error,
+    }))
+  ),
+});
+
+// Destructure specific properties from userFeature for easy access
+export const {
+  name: userFeatureKey,        // Feature name
+  reducer: userReducer,        // Reducer function
+  selectUsers,                 // Selector for `users`
+  selectSelectedUser,          // Selector for `selectedUser`
+  selectLoading,               // Selector for `loading`
+  selectError,                 // Selector for `error`
+  selectIsSubmitting,          // Selector for `isSubmitting`
+  selectSuccessMessage,        // Selector for success message
+  selectErrorMessage,          // Selector for error message
+  selectLoggedusers,
+} = userFeature;
+
+
+// File: src\app\state\users\users.service.ts
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { environment } from 'src/environment/environment';
+import { CreateUserRequest, CreateUserResponse, DeleteUserResponse, GetLoggedUserResponse, GetUsersResponse, UpdateUserRequest, User } from 'src/app/core/user.model';
+
+
+
+
+@Injectable({
+  providedIn: 'root'
+})
+export class UserService {
+  private apiUrl = `${environment.apiUrl}/users`;
+  private updateUrl = `${environment.apiUrl}/user`;
+  private deleteteUrl = `${environment.apiUrl}/user`;
+  private addUrl = `${environment.apiUrl}/user`;
+
+  constructor(private http: HttpClient) {}
+
+  getUsers(): Observable<GetUsersResponse> {
+    const token = localStorage.getItem('authToken');
+
+    // Set headers with the Authorization token and X-Request-ID
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`, // Include the token as a Bearer token
+      'X-Request-ID': '1', // Include the required X-Request-ID header
+    });
+    const url = `${this.apiUrl}`;
+    console.log('Requesting GET:', url); // Log the URL to verify
+    return this.http.get<GetUsersResponse>(url, { headers });
+  }
+
+  createUser(userData: CreateUserRequest): Observable<CreateUserResponse> {
+    const token = localStorage.getItem('authToken');
+
+    // Set headers with the Authorization token and X-Request-ID
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`, // Include the token as a Bearer token
+      'X-Request-ID': '1', // Include the required X-Request-ID header
+    });
+    return this.http.post<CreateUserResponse>(`${this.addUrl}`, userData, { headers });
+  }
+
+  updateUser(userId: string, userData: UpdateUserRequest): Observable<User> {
+    const token = localStorage.getItem('authToken');
+
+    // Set headers with the Authorization token and X-Request-ID
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`, // Include the token as a Bearer token
+      'X-Request-ID': '1', // Include the required X-Request-ID header
+    });
+    return this.http.put<User>(`${this.updateUrl}/${userId}`, userData, { headers });
+  }
+
+  deleteUser(userId: string): Observable<DeleteUserResponse> {
+    const token = localStorage.getItem('authToken');
+
+    // Set headers with the Authorization token and X-Request-ID
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`, // Include the token as a Bearer token
+      'X-Request-ID': '1', // Include the required X-Request-ID header
+    });
+    return this.http.delete<DeleteUserResponse>(`${this.deleteteUrl}/${userId}`, { headers });
+  }
+
+  getLoggedUser(): Observable<GetLoggedUserResponse> {
+    const token = localStorage.getItem('authToken');
+
+    // Set headers with the Authorization token and X-Request-ID
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`, // Include the token as a Bearer token
+      'X-Request-ID': '1', // Include the required X-Request-ID header
+    });
+    const url = this.addUrl;
+    return this.http.get<GetLoggedUserResponse>(url, { headers });
+  }
+
+  
+}
+
+
+// File: src\environment\environment.prod.ts
+export const environment = {
+    production: true,
+    apiUrl: 'https://backend-user-product-management.vercel.app',
+  };
+  
+
+// File: src\environment\environment.ts
+export const environment = {
+    production: false,
+    apiUrl: 'https://backend-user-product-management.vercel.app',
+  };
+  
+
+// File: src\index.html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>EcommerceCatalog</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body class="mat-typography">
+  <app-root></app-root>
+</body>
+</html>
+
+
+// File: src\main.ts
+import { bootstrapApplication } from '@angular/platform-browser';
+import { provideRouter, Routes } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { authFeatureKey, authReducer } from './app/state/auth/auth.reducer';
+import { AuthEffects } from './app/state/auth/auth.effects';
+import { provideEffects } from '@ngrx/effects';
+import { provideStore } from '@ngrx/store';
+import { importProvidersFrom, isDevMode } from '@angular/core';
+import { provideStoreDevtools, StoreDevtoolsModule } from '@ngrx/store-devtools';
+import { environment } from './environment/environment';
+import { AppComponent } from './app/app.component';
+import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
+import { LoginComponent } from './app/auth/login/login.component';
+import { RegisterComponent } from './app/auth/register/register.component';
+import { DashboardComponent } from './app/mainlayout/dashboard/dashboard.component';
+import { AuthGuard } from './app/auth/auth.guard';
+import { CategoriesComponent } from './app/mainlayout/pages/categories/categories.component';
+
+import { TransactionsComponent } from './app/mainlayout/pages/transactions/transactions.component';
+import { UserListComponent } from './app/mainlayout/pages/users/user-list.component';
+import { userFeatureKey, userReducer } from './app/state/users/users.reducer';
+import { UserEffects } from './app/state/users/users.effects';
+import { ForgotPasswordComponent } from './app/auth/forgotpassword/forgotpassword.component';
+import { categoryFeatureKey, categoryReducer } from './app/mainlayout/pages/categories/ngrx/categories.reducers';
+import { CategoryEffects } from './app/mainlayout/pages/categories/ngrx/categories.effects';
+import { ProductsComponent } from './app/mainlayout/pages/products/products.component';
+import { productFeatureKey, productReducer } from './app/mainlayout/pages/products/ngrx/products.reducers';
+import { ProductEffects } from './app/mainlayout/pages/products/ngrx/products.effects';
+
+
+
+
+const routes: Routes = [
+  // Public routes
+  { path: 'login', component: LoginComponent },
+  { path: 'register', component: RegisterComponent },
+  { path: 'forgotpassword', component: ForgotPasswordComponent },
+  { path: '', component: RegisterComponent },
+
+  // Protected routes with Dashboard layout
+  {
+    path: 'dashboard',
+    component: DashboardComponent,
+    canActivate: [AuthGuard], // Protect Dashboard with AuthGuard
+    children: [
+      { path: 'categories', component: CategoriesComponent },
+      { path: 'products', component: ProductsComponent },
+      { path: 'transactions', component: TransactionsComponent },
+      { path: 'users', component: UserListComponent },
+      // { path: '', redirectTo: 'users', pathMatch: 'full' },
+    ]
+  },
+
+  // Wildcard route for unknown paths
+  // { path: '**', redirectTo: 'login' }
+];
+
+bootstrapApplication(AppComponent, {
+  providers: [
+    provideHttpClient(),
+    provideRouter(routes), // Add routing to the application
+    provideStore({ [authFeatureKey]: authReducer , [userFeatureKey]: userReducer, [categoryFeatureKey]: categoryReducer, [productFeatureKey]: productReducer}),
+    provideEffects([AuthEffects, UserEffects, CategoryEffects, ProductEffects]),
+    importProvidersFrom(
+      BrowserAnimationsModule,
+      StoreDevtoolsModule.instrument({
+        maxAge: 25,
+        logOnly: environment.production,
+      })
+    ),
+    provideStoreDevtools({ maxAge: 25, logOnly: !isDevMode() })
+  ],
+}).catch(err => console.error(err));

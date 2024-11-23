@@ -1,0 +1,76 @@
+<div class="categories-container">
+
+    <!-- Search Bar -->
+    <mat-form-field appearance="outline" class="search-bar">
+      <mat-label>Search Categories</mat-label>
+      <input matInput [formControl]="searchControl" placeholder="Search by category name">
+    </mat-form-field>
+  
+    <!-- Add Category Button -->
+    <div class="actions">
+      <button mat-raised-button color="primary" (click)="openAddCategoryModal()">
+        <mat-icon>add</mat-icon> Add Category
+      </button>
+    </div>
+
+      <!-- Loading Indicator -->
+  <div *ngIf="isLoading$ | async" class="loading">
+    Loading users...
+  </div>
+
+  <!-- Error Message -->
+  <div *ngIf="error$ | async as error" class="error">
+    Error: {{ error }}
+  </div>
+  
+    <!-- Table -->
+    <div class="table-container">
+      <mat-table [dataSource]="dataSource" matSort>
+  
+        <!-- Category ID Column -->
+        <ng-container matColumnDef="category_id">
+          <mat-header-cell *matHeaderCellDef> ID </mat-header-cell>
+          <mat-cell *matCellDef="let category"> {{ category.category_id }} </mat-cell>
+        </ng-container>
+  
+        <!-- Category Name Column -->
+        <ng-container matColumnDef="category_name">
+          <mat-header-cell *matHeaderCellDef> Name </mat-header-cell>
+          <mat-cell *matCellDef="let category"> {{ category.category_name }} </mat-cell>
+        </ng-container>
+  
+        <!-- Date Created Column -->
+        <ng-container matColumnDef="date_created">
+          <mat-header-cell *matHeaderCellDef> Created On </mat-header-cell>
+          <mat-cell *matCellDef="let category"> {{ category.date_created | date:'shortDate' }} </mat-cell>
+        </ng-container>
+  
+        <!-- Created By Column -->
+        <ng-container matColumnDef="created_by">
+          <mat-header-cell *matHeaderCellDef> Created By </mat-header-cell>
+          <mat-cell *matCellDef="let category"> {{ category.created_by }} </mat-cell>
+        </ng-container>
+  
+        <!-- Actions Column -->
+        <ng-container matColumnDef="actions">
+          <mat-header-cell *matHeaderCellDef> Actions </mat-header-cell>
+          <mat-cell *matCellDef="let category">
+            <button mat-icon-button color="primary" (click)="openEditCategoryModal(category)">
+              <mat-icon>edit</mat-icon>
+            </button>
+            <button mat-icon-button color="warn" (click)="onDeleteCategory(category.category_id)">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </mat-cell>
+        </ng-container>
+  
+        <!-- Header and Row Definitions -->
+        <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+        <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
+      </mat-table>
+  
+      <!-- Paginator -->
+      <mat-paginator [pageSizeOptions]="[5, 10, 20]" showFirstLastButtons></mat-paginator>
+    </div>
+  </div>
+  

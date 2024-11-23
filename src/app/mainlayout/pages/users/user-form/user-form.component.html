@@ -1,0 +1,98 @@
+<h2>{{ isEditMode ? 'Edit User' : 'Add New User' }}</h2>
+
+<form [formGroup]="userForm" (ngSubmit)="onSubmit()">
+  <mat-form-field appearance="outline">
+    <mat-label>First Name</mat-label>
+    <input matInput formControlName="first_name" required />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Last Name</mat-label>
+    <input matInput formControlName="last_name" required />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Contact Number</mat-label>
+    <input matInput formControlName="contact_number" required />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Address</mat-label>
+    <input matInput formControlName="address" required />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Username</mat-label>
+    <input matInput formControlName="username" required />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Password</mat-label>
+    <input matInput formControlName="password" type="password" [required]="!isEditMode" />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Access Level</mat-label>
+    <mat-select formControlName="access_level" required>
+      <mat-option *ngFor="let level of accessLevels" [value]="level.value">
+        {{ level.viewValue }}
+      </mat-option>
+    </mat-select>
+    <mat-error *ngIf="userForm.get('access_level')?.hasError('required')">
+      Access level is required.
+    </mat-error>
+  </mat-form-field>
+
+  <!-- Image Upload -->
+  <div class="image-upload">
+    <label for="imageInput">Upload Image:</label>
+    <input
+      type="file"
+      id="imageInput"
+      (change)="onFileChange($event)"
+      accept="image/*"
+    />
+    <div *ngIf="imagePreview" class="image-preview">
+      <img [src]="imagePreview" alt="Image Preview" />
+    </div>
+    <mat-error *ngIf="userForm.get('user_img')?.hasError('required')">
+      Image is required.
+    </mat-error>
+  </div>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Position</mat-label>
+    <input matInput formControlName="position" />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Department</mat-label>
+    <input matInput formControlName="department" />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Branch</mat-label>
+    <input matInput formControlName="branch" />
+  </mat-form-field>
+
+  <div class="status-group">
+    <label>Status:</label>
+    <mat-radio-group formControlName="status">
+      <mat-radio-button value="ACTIVE">Active</mat-radio-button>
+      <mat-radio-button value="INACTIVE">Inactive</mat-radio-button>
+    </mat-radio-group>
+    <mat-error *ngIf="userForm.get('status')?.hasError('required')">
+      Status is required.
+    </mat-error>
+  </div>
+
+  <!-- Other form fields for address, username, password, etc. -->
+  <div class="actions">
+
+    <button mat-button (click)="onCancel()">Cancel</button>
+    <button mat-raised-button color="primary" type="submit">{{ isEditMode ? 'Update' : 'Add New' }} User</button>
+  </div>
+
+</form>
+
+

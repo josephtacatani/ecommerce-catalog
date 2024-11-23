@@ -1,0 +1,137 @@
+<div class="product-form-container">
+  <h2>{{ isEditMode ? 'Edit Product' : 'Add New Product' }}</h2>
+  <form class="forms" [formGroup]="productForm" (ngSubmit)="onSubmit()">
+    <!-- Product Name -->
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Product Name</mat-label>
+      <input
+        matInput
+        id="product_name"
+        formControlName="product_name"
+        placeholder="Enter product name"
+      />
+      <mat-error *ngIf="productForm.get('product_name')?.invalid">
+        Product name is required
+      </mat-error>
+    </mat-form-field>
+
+    <!-- Product Image -->
+    <div class="image-upload">
+      <label for="imageInput">Upload Image:</label>
+      <input
+        type="file"
+        id="imageInput"
+        (change)="onFileChange($event)"
+        accept="image/*"
+      />
+      <div *ngIf="imagePreview" class="image-preview">
+        <img [src]="imagePreview" alt="Image Preview" />
+      </div>
+      <mat-error *ngIf="productForm.get('product_img')?.hasError('required')">
+        Image is required.
+      </mat-error>
+    </div>
+    
+
+    <!-- Product Description -->
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Product Description</mat-label>
+      <textarea
+        matInput
+        id="product_description"
+        formControlName="product_description"
+        placeholder="Enter product description"
+        rows="4"
+      ></textarea>
+    </mat-form-field>
+
+    <!-- Price -->
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Price</mat-label>
+      <input
+        matInput
+        type="number"
+        id="price"
+        formControlName="price"
+        placeholder="Enter product price"
+      />
+    </mat-form-field>
+
+    <!-- Currency -->
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Currency</mat-label>
+      <mat-select id="currency" formControlName="currency">
+        <mat-option value="php">PHP</mat-option>
+        <mat-option value="usd">USD</mat-option>
+        <mat-option value="eur">EUR</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <!-- Categories -->
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Category</mat-label>
+      <mat-select id="category" formControlName="category" placeholder="Select Category">
+        <mat-option *ngFor="let category of categories$ | async" [value]="category.category_id">
+          {{ category.category_name }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <!-- Dynamic Other Details -->
+    <div formArrayName="other_details">
+      <div *ngFor="let section of otherDetails.controls; let i = index" [formGroupName]="i" class="dynamic-section">
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Section Name</mat-label>
+          <input matInput formControlName="sectionName" placeholder="Enter section name" />
+        </mat-form-field>
+    
+        <div formArrayName="fields">
+          <div *ngFor="let field of getFields(i).controls; let j = index" [formGroupName]="j" class="key-value-pair">
+            <mat-form-field appearance="outline" class="half-width">
+              <mat-label>Key</mat-label>
+              <input matInput formControlName="key" placeholder="Enter key" />
+            </mat-form-field>
+            <mat-form-field appearance="outline" class="half-width">
+              <mat-label>Value</mat-label>
+              <input matInput formControlName="value" placeholder="Enter value" />
+            </mat-form-field>
+            <button mat-icon-button color="warn" (click)="removeKeyValuePair(i, j)">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </div>
+        </div>
+        <button mat-button color="primary" (click)="addKeyValuePair(i)">
+          <mat-icon>add</mat-icon> Add Key-Value Pair
+        </button>
+        <button mat-icon-button color="warn" (click)="removeOtherDetailsSection(i)">
+          <mat-icon>delete</mat-icon> Remove Section
+        </button>
+      </div>
+      <button mat-button color="primary" (click)="addOtherDetailsSection()">
+        <mat-icon>add</mat-icon> Add Section
+      </button>
+    </div>
+    
+
+    <!-- Created By -->
+    <div class="form-group">
+      <mat-form-field appearance="fill">
+        <mat-label>Created By</mat-label>
+        <input matInput formControlName="created_by" readonly />
+        <mat-error *ngIf="productForm.get('created_by')?.value === ''">
+          Created By is missing or not set correctly!
+        </mat-error>
+      </mat-form-field>
+    </div>
+    
+    
+
+    <!-- Submit Button -->
+    <div class="actions">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" type="submit">
+        {{ isEditMode ? 'Update' : 'Add New' }} Product
+      </button>
+    </div>
+  </form>
+</div>
