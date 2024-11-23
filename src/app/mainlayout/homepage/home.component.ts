@@ -14,6 +14,12 @@ import { Router } from '@angular/router';
 import { Product } from '../pages/products/ngrx/products.models';
 import { ProductActions } from '../pages/products/ngrx/products.actions';
 import { selectProducts } from '../pages/products/ngrx/products.reducers';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { selectError, selectSuccessMessage } from '../cart/cartngrx/cart.reducers';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatOptionModule } from '@angular/material/core';
+import { MatSelectModule } from '@angular/material/select';
+import { ReactiveFormsModule } from '@angular/forms';
 
 
 @Component({
@@ -24,21 +30,37 @@ import { selectProducts } from '../pages/products/ngrx/products.reducers';
   imports: [
     MatIconModule,
     CartComponent,
-    CommonModule
+    CommonModule,
+    MatSnackBarModule,
+    MatFormFieldModule,
+    MatOptionModule,
+    MatSelectModule,
+    ReactiveFormsModule
   ]
 })
 export class HomeComponent implements OnInit {
   loggeduser$: Observable<User | null>;
   userAccessLevel: string | null = null;
   products$: Observable<Product[] | null>
+  productQuantities: { [key: string]: number } = {};
+  message$: Observable<string | null>;
+  error$: Observable<string | null>;
   
 
-  constructor(private store: Store, private router: Router) {
+  
+
+  constructor(
+    private store: Store, 
+    private router: Router,
+    private snackBar: MatSnackBar
+  ) {
     
     this.store.dispatch(UserActions.loadLoggedUser());
     this.store.dispatch(ProductActions.loadProducts());
     this.loggeduser$ = this.store.select(selectLoggedusers);
     this.products$ = this.store.select(selectProducts);
+    this.message$ = this.store.select(selectSuccessMessage);
+    this.error$ = this.store.select(selectError);
 
 
     this.loggeduser$
@@ -51,6 +73,19 @@ export class HomeComponent implements OnInit {
       }
       else{
         this.router.navigate(['/home']);
+      }
+    });
+
+    this.error$.subscribe((error) => {
+      if (error) {
+        console.error('Error received in component:', error); // Log the error
+        this.showSnackbar(error); // Optionally show the error in the UI
+      }
+    });
+  
+    this.message$.subscribe((message) => {
+      if (message) {
+        this.showSnackbar(message);
       }
     });
 
@@ -74,10 +109,11 @@ export class HomeComponent implements OnInit {
   }
 
   addToCart(product: Product): void{
+    const quantity = this.productQuantities[product.product_name] || 1;
     const cartItem: CartItem = {
       product_name: product.product_name,
-      quantity: 1,
-      total_price: product.price,
+      quantity,
+      total_price: product.price * quantity,
       currency: product.currency,
       product_img: product.product_img,
       other_details: {},
@@ -85,5 +121,30 @@ export class HomeComponent implements OnInit {
     }
     this.store.dispatch(CartActions.addToCart({item:cartItem}))
   }
+
+  increaseQuantity(product: Product): void {
+    const currentQuantity = this.productQuantities[product.product_name] || 1;
+    this.productQuantities[product.product_name] = currentQuantity + 1;
+  }
+  
+  decreaseQuantity(product: Product): void {
+    const currentQuantity = this.productQuantities[product.product_name] || 1;
+    if (currentQuantity > 1) {
+      this.productQuantities[product.product_name] = currentQuantity - 1;
+    }
+  }
+
+  private showSnackbar(message: string): void {
+    this.snackBar.open(message, 'Close', {
+      duration: 3000,
+      verticalPosition: 'top',
+      horizontalPosition: 'center',
+    });
+  }
+
+
+
+  
+  
 
 }

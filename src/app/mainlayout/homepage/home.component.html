@@ -17,15 +17,29 @@
   </header>
 
   <main>
+
+    
     <!-- Main product listing -->
     <div class="product-list" *ngIf="products$ | async as products">
       <div *ngFor="let product of products " class="product-card">
         <img [src]="product.product_img" alt="{{ product.product_name }}" />
         <h3>{{ product.product_name }}</h3>
-        <p>{{ product.currency }} {{ product.price }}</p>
+        <p>{{ product.currency | uppercase }} {{ product.price | number:'1.2-2'}}</p>
+        
+        <div class="quantity-selector">
+          <button mat-mini-button (click)="decreaseQuantity(product)">-</button>
+          <span>{{ productQuantities[product.product_name] || 1 }}</span>
+          <button mat-mini-button (click)="increaseQuantity(product)">+</button>
+        </div>
+    
         <div class="actions">
-          <button mat-raised-button color="primary" (click)="addToCart(product)" >Add to Cart</button>
-
+          <button 
+            mat-raised-button 
+            color="primary" 
+            (click)="addToCart(product)"
+          >
+            Add to Cart
+          </button>
         </div>
       </div>
     </div>

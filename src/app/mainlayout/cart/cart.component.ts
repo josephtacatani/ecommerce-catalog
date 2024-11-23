@@ -24,6 +24,7 @@ export class CartComponent {
   cartItems$: Observable<(CartItem & { cart_id: string})[]>;
   message$: Observable<string | null>;
   error$: Observable<string | null>;
+  grandTotal$: Observable<number>;
 
   constructor(
     private store: Store,
@@ -61,6 +62,10 @@ export class CartComponent {
           this.showSnackbar(error);
         }
       });
+
+      this.grandTotal$ = this.cartItems$.pipe(
+        map(items => items.reduce((sum, item) => sum + item.total_price, 0))
+      );
     
   }
 

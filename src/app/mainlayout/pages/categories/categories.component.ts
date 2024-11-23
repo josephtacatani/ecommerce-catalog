@@ -80,6 +80,12 @@ export class CategoriesComponent implements OnInit {
         this.showSnackbar(error); // Optionally show the error in the UI
       }
     });
+
+    this.message$.subscribe((message) => {
+      if (message) {
+        this.showSnackbar(message);
+      }
+    });
     
     
 
@@ -93,11 +99,7 @@ export class CategoriesComponent implements OnInit {
     
 
     // Show success or error messages
-    this.message$.subscribe((message) => {
-      if (message) {
-        this.showSnackbar(message);
-      }
-    });
+
   }
 
   openAddCategoryModal(): void {

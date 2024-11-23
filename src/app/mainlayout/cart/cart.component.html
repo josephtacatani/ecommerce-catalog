@@ -10,7 +10,8 @@
         <div class="item-details">
           <span class="product-name">{{ item.product_name }}</span>
           <span class="product-quantity">Quantity: {{ item.quantity }}</span>
-          <span class="product-price">{{ item.currency }} {{ item.total_price }}</span>
+          <span class="product-price">Unit Price: {{ item.currency | uppercase}} {{ item.total_price / item.quantity | number:'1.2-2' }}</span>
+          <span class="product-price">Sub Total: {{ item.currency | uppercase}} {{ item.total_price | number:'1.2-2'}}</span>
         </div>
         <button mat-icon-button color="warn" (click)="removeItem(item.cart_id)">
           <mat-icon>delete</mat-icon>
@@ -20,8 +21,8 @@
   
     <div class="cart-footer">
       <div class="subtotal">
-        <span>Sub-Total:</span>
-        <!-- <span>{{ currency }} {{ calculateSubtotal()  }}</span> -->
+        <span>Grand-Total:</span>
+        <span>{{ grandTotal$ | async | number:'1.2-2' }}</span>
       </div>
       <button mat-raised-button color="primary" (click)="checkout()">Check Out</button>
     </div>
